@@ -208,3 +208,12 @@ body { background: var(--bg); }
 .grade-B { background: var(--good); }
 .grade-C { background: var(--again); }
 .topbar .link { padding: 0; font-size: 14px; text-decoration: none; }
+
+/* ---- 7단계: 최초 실행 목소리 선택, 급수 선택 ---- */
+.level.small-title { font-size: 26px; margin: 4px 0 8px; }
+.voice-list { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 16px; }
+.voice-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 2px solid var(--border); border-radius: 12px; padding: 8px 8px 8px 14px; }
+.voice-card.on { border-color: var(--primary); background: var(--accent-bg, rgba(43,108,176,0.06)); }
+.voice-pick { flex: 1; text-align: left; background: none; border: none; font-size: 17px; font-weight: 600; color: var(--text); cursor: pointer; min-height: 44px; }
+.voice-card .btn.play { margin-top: 0; }
+.seg button:disabled { opacity: 0.4; cursor: default; }

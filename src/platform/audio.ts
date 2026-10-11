@@ -20,10 +20,10 @@ const EXAMPLE_SUFFIX = '_ex'
 
 let current: HTMLAudioElement | null = null
 
-function audioUrl(word: Word, suffix = ''): string | null {
-  if (!word.audio || !VOICE_NAME) return null
+function audioUrl(word: Word, suffix = '', voice = VOICE_NAME): string | null {
+  if (!word.audio || !voice) return null
   const level = word.level.toLowerCase()
-  return `${import.meta.env.BASE_URL}audio/${level}/${VOICE_NAME}/${word.audio}${suffix}.mp3`
+  return `${import.meta.env.BASE_URL}audio/${level}/${voice}/${word.audio}${suffix}.mp3`
 }
 
 function stopAll() {
@@ -64,12 +64,12 @@ function play(url: string | null, fallbackText: string) {
   })
 }
 
-/** 단어 발음 재생 */
-export function playWord(word: Word): void {
-  play(audioUrl(word), word.reading)
+/** 단어 발음 재생. voice 를 주면 그 목소리로 (목소리 고르기 화면용) */
+export function playWord(word: Word, voice?: string): void {
+  play(audioUrl(word, '', voice ?? VOICE_NAME), word.reading)
 }
 
 /** 예문 전체 발음 재생 */
-export function playExample(word: Word): void {
-  play(audioUrl(word, EXAMPLE_SUFFIX), word.example_ja)
+export function playExample(word: Word, voice?: string): void {
+  play(audioUrl(word, EXAMPLE_SUFFIX, voice ?? VOICE_NAME), word.example_ja)
 }

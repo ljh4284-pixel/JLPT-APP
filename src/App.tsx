@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { JudgeResult, Rating, SessionCard } from './types'
-import { wordsN5 } from './data/words'
+import type { JudgeResult, Rating, SessionCard, Word } from './types'
+import { availableLevels, loadWords } from './data/words'
 import {
   allProgress,
   currentCard,
@@ -27,12 +27,13 @@ import {
   weightsFor,
   type Settings as SettingsValue,
 } from './learning/settings'
-import { accuracyStats, levelStats } from './learning/stats'
+import { accuracyStats, levelStats, type LevelStats } from './learning/stats'
 import { backupFilename, parseBackup, serializeBackup } from './learning/backup'
 import { setVoice } from './platform/audio'
 import { downloadText, pickTextFile } from './platform/file'
 import { getSetting, loadAllSettings, replaceAllSettings, setSetting } from './platform/storage'
 import { Home } from './screens/Home'
+import { Onboarding } from './screens/Onboarding'
 import { Present } from './screens/Present'
 import { QuestionA } from './screens/QuestionA'
 import { QuestionB } from './screens/QuestionB'
@@ -43,32 +44,39 @@ import { Done } from './screens/Done'
 import { Progress } from './screens/Progress'
 import { Settings } from './screens/Settings'
 
-/** 화면 단계: 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료. 홈에서 진도·설정으로 */
-type Phase = 'loading' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done' | 'progress' | 'settings'
-
-const LEVEL = 'N5'
+/** 화면 단계: (최초 실행) → 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료. 홈에서 진도·설정으로 */
+type Phase = 'loading' | 'onboarding' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done' | 'progress' | 'settings'
 
 const EMPTY_SESSION: Session = { queue: [], relearn: [], answered: 0, correct: 0 }
 
-/** 쓸 수 있는 목소리 (7단계에서 추가). 이름은 gen_audio.py 의 VOICE_NAME 과 같다 */
-const VOICES = [{ name: 'ja-JP-Chirp3-HD-Charon', label: 'Charon (남성)' }]
+/** 쓸 수 있는 목소리. 이름은 gen_audio.py 의 VOICE_NAMES 와 같다 */
+const VOICES = [
+  { name: 'ja-JP-Chirp3-HD-Charon', label: 'Charon (남성)' },
+  { name: 'ja-JP-Neural2-B', label: 'Neural2-B (여성)' },
+]
+
+/** 목소리 들어보기에 쓸 단어 id (病院は美容院の隣です。) */
+const SAMPLE_WORD_ID = 'n5-0013'
 
 function App() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [settings, setSettingsState] = useState<SettingsValue>(() => normalizeSettings(undefined))
+  const [words, setWords] = useState<Word[]>([])          // 현재 급수의 단어장
   const [session, setSession] = useState<Session>(EMPTY_SESSION)
   const [current, setCurrent] = useState<SessionCard | null>(null)
   const [result, setResult] = useState<JudgeResult | undefined>(undefined)
   const [cardShownAt, setCardShownAt] = useState(0)   // 카드가 보인 시각 (소요 시간 측정)
   const [message, setMessage] = useState<string | null>(null)
+  const [progressLevels, setProgressLevels] = useState<LevelStats[]>([])
   const [now, setNow] = useState(() => new Date())   // 화면 표시용 현재 시각 (1초마다 갱신)
 
-  const words = wordsN5
+  const level = settings.level
 
-  // 앱 시작: 저장소에서 학습 기록과 설정을 읽는다
+  // 앱 시작: 저장소에서 학습 기록과 설정을 읽는다. 설정이 없으면 최초 실행 안내로
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      let s = normalizeSettings(undefined)
       try {
         await initProgress()
         let raw = await getSetting<unknown>(SETTINGS_KEY)
@@ -77,21 +85,31 @@ function App() {
           const oldInputMode = await getSetting<string>('inputMode')
           if (oldInputMode) raw = { inputMode: oldInputMode }
         }
-        const s = normalizeSettings(raw)
-        if (!cancelled) {
-          setSettingsState(s)
-          setVoice(s.voice)
-        }
+        s = normalizeSettings(raw)
       } catch (e) {
         console.error('저장소 읽기 실패', e)
         if (!cancelled) setMessage('저장된 기록을 읽지 못했습니다. 이번에는 기록이 저장되지 않을 수 있습니다.')
       }
-      if (!cancelled) setPhase('home')
+      if (cancelled) return
+      setSettingsState(s)
+      setVoice(s.voice)
+      setPhase(s.onboarded ? 'home' : 'onboarding')
     })()
     return () => {
       cancelled = true
     }
   }, [])
+
+  // 급수가 바뀌면 그 급수의 단어장만 불러온다 (급수별 분리 로딩)
+  useEffect(() => {
+    let cancelled = false
+    loadWords(level).then((list) => {
+      if (!cancelled) setWords(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [level])
 
   /** 세션에서 다음 할 일을 꺼내 화면을 정한다 */
   function advance(s: Session, force = false) {
@@ -122,17 +140,17 @@ function App() {
     return () => clearInterval(id)
   })
 
-  const weights = weightsFor(settings, LEVEL)
-
-  function start() {
-    setMessage(null)
-    advance(buildSession(words, allProgress(), new Date(), { newPerDay: settings.newPerDay, weights }))
-  }
+  const weights = weightsFor(settings, level)
 
   function updateSettings(next: SettingsValue) {
     setSettingsState(next)
     setVoice(next.voice)
     void setSetting(SETTINGS_KEY, next)
+  }
+
+  function start() {
+    setMessage(null)
+    advance(buildSession(words, allProgress(), new Date(), { newPerDay: settings.newPerDay, weights }))
   }
 
   /** 읽기 고르기(B)·발음 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
@@ -154,6 +172,15 @@ function App() {
     advance(afterRating(session, current, rating, progress, weights))
   }
 
+  /** 진도 화면: 준비된 모든 급수의 단어장을 읽어 급수별 통계를 만든다 */
+  async function openProgress() {
+    const list = allProgress()
+    const stats: LevelStats[] = []
+    for (const l of availableLevels()) stats.push(levelStats(await loadWords(l), list, l))
+    setProgressLevels(stats)
+    setPhase('progress')
+  }
+
   // ---- 기록 내보내기 / 불러오기 / 초기화 ----
   async function exportBackup() {
     const all = await loadAllSettings()
@@ -170,7 +197,7 @@ function App() {
       await replaceProgress(progress)
       await replaceAllSettings(restored)
       const s = normalizeSettings(restored[SETTINGS_KEY])
-      setSettingsState(s)
+      setSettingsState({ ...s, onboarded: true })
       setVoice(s.voice)
       setMessage(`기록 ${progress.length}개를 불러왔습니다`)
     } catch (e) {
@@ -187,6 +214,8 @@ function App() {
   const progressList = allProgress()
   const dueCount = dueWords(words, progressList, now).length
   const newCount = newWords(words, progressList, settings.newPerDay).length
+  const learnedCount = progressList.filter((p) => p.level === level).length
+  const sampleWord = words.find((w) => w.id === SAMPLE_WORD_ID) ?? words[0] ?? null
 
   const intervals = current
     ? (() => {
@@ -209,7 +238,7 @@ function App() {
       {current && (phase === 'present' || phase === 'question' || phase === 'feedback') && (
         <header className="topbar">
           <span>
-            {LEVEL} · {TYPE_LABEL[current.questionType]}
+            {level} · {TYPE_LABEL[current.questionType]}
             {current.isNew ? ' · 신규' : ' · 복습'}
           </span>
           <span>{session.answered + 1} / {total}</span>
@@ -221,28 +250,42 @@ function App() {
           <p className="muted">불러오는 중…</p>
         </main>
       )}
+      {phase === 'onboarding' && (
+        <Onboarding
+          voices={VOICES}
+          sample={sampleWord}
+          value={settings.voice}
+          onChange={(voice) => updateSettings({ ...settings, voice })}
+          onDone={() => {
+            updateSettings({ ...settings, onboarded: true })
+            setPhase('home')
+          }}
+        />
+      )}
       {phase === 'home' && (
         <Home
-          level={LEVEL}
+          level={level}
+          availableLevels={availableLevels()}
           dueCount={dueCount}
           newCount={newCount}
-          learnedCount={progressList.length}
+          learnedCount={learnedCount}
           message={message}
+          onLevelChange={(l) => updateSettings({ ...settings, level: l })}
           onStart={start}
-          onProgress={() => setPhase('progress')}
+          onProgress={() => void openProgress()}
           onSettings={() => { setMessage(null); setPhase('settings') }}
         />
       )}
       {phase === 'progress' && (
         <Progress
-          levels={[levelStats(words, progressList, LEVEL)]}
+          levels={progressLevels}
           accuracy={accuracyStats(progressList, now)}
           onClose={() => setPhase('home')}
         />
       )}
       {phase === 'settings' && (
         <Settings
-          level={LEVEL}
+          level={level}
           settings={settings}
           voices={VOICES}
           message={message}

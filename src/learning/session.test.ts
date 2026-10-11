@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { WordProgress } from '../types'
-import { wordsN5 } from '../data/words'
+import type { Word, WordProgress } from '../types'
+import wordsJson from '../data/words_n5.json'
 import { applyRating, newCard } from './scheduler'
 import {
   afterRating,
@@ -17,6 +17,7 @@ import {
   typeFor,
 } from './session'
 
+const wordsN5 = wordsJson as Word[]
 const now = new Date('2026-10-12T09:00:00')
 const OPTS = { newPerDay: 5, weights: { A: 2, B: 1, C: 1 } }
 const word = (i: number) => wordsN5[i]

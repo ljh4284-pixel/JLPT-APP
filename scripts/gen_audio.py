@@ -9,7 +9,8 @@ Google Cloud Text-to-Speech 로 단어 발음 mp3 를 만드는 개발용 스크
 사용법:
   python scripts/gen_audio.py --list-voices   ja-JP 음성 목록 출력
   python scripts/gen_audio.py --samples       목소리 선정용 샘플 4개 → scripts/samples/
-  python scripts/gen_audio.py --generate      단어 mp3 → public/audio/n5/<VOICE_NAME>/<id>.mp3
+  python scripts/gen_audio.py --generate      모든 급수 × 모든 목소리. 단어 mp3 → public/audio/<급수>/<목소리>/<id>.mp3
+      [--level n5] [--voice 이름]            특정 급수·목소리만
                                               예문 mp3 → public/audio/n5/<VOICE_NAME>/<id>_ex.mp3 (example_ja 를 읽음)
                                               이미 있는 파일은 건너뜀. 끝나면 words_n5.json 의 audio 필드 채움
 """
@@ -23,20 +24,19 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 # 생성 설정 (재생성 시 같은 결과가 나오도록 여기서만 바꾼다)
 # ---------------------------------------------------------------------------
-VOICE_NAME = "ja-JP-Chirp3-HD-Charon"          # 샘플을 듣고 고른 뒤 채운다. 예: "ja-JP-Neural2-B"
+VOICE_NAMES = ["ja-JP-Chirp3-HD-Charon", "ja-JP-Neural2-B"]   # 앱에서 고를 수 있는 목소리. 앱의 VOICES 목록과 같아야 함
 LANGUAGE_CODE = "ja-JP"
 SPEAKING_RATE = 1.0      # 기본 속도
 AUDIO_FORMAT = "MP3"
-LEVEL = "n5"
+LEVELS = ["n5"]          # 단어장 파일(src/data/words_<급수>.json)이 있는 급수
 EXAMPLE_SUFFIX = "_ex"   # 예문 파일명: <id>_ex.mp3 (앱의 src/platform/audio.ts 와 같아야 함)
 
 SAMPLE_SENTENCE = "病院は美容院の隣です。"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT, ".env")
-WORDS_PATH = os.path.join(ROOT, "src", "data", "words_n5.json")
 SAMPLES_DIR = os.path.join(ROOT, "scripts", "samples")
-AUDIO_DIR = os.path.join(ROOT, "public", "audio", LEVEL)
+AUDIO_ROOT = os.path.join(ROOT, "public", "audio")
 
 
 def setup_auth():
@@ -135,14 +135,12 @@ def cmd_samples():
         print(f"  생성: {name} ({gender}) → {os.path.relpath(out, ROOT)}")
 
 
-def cmd_generate():
-    if not VOICE_NAME:
-        sys.exit("VOICE_NAME 이 비어 있습니다. 샘플을 듣고 스크립트 상단 VOICE_NAME 을 채운 뒤 다시 실행하세요.")
-    tts, client = make_client()
-    with open(WORDS_PATH, encoding="utf-8") as f:
+def generate_level_voice(tts, client, level, voice):
+    """한 급수의 단어·예문을 한 목소리로 생성한다. 있는 파일은 건너뛴다"""
+    words_path = os.path.join(ROOT, "src", "data", f"words_{level}.json")
+    with open(words_path, encoding="utf-8") as f:
         words = json.load(f)
-
-    out_dir = os.path.join(AUDIO_DIR, VOICE_NAME)
+    out_dir = os.path.join(AUDIO_ROOT, level, voice)
     os.makedirs(out_dir, exist_ok=True)
     made, skipped = 0, 0
     for w in words:
@@ -151,9 +149,9 @@ def cmd_generate():
         if os.path.exists(out) and os.path.getsize(out) > 0:
             skipped += 1
         else:
-            synthesize(tts, client, w["reading"], VOICE_NAME, out)
+            synthesize(tts, client, w["reading"], voice, out)
             made += 1
-            print(f"  생성: {w['id']:>3} {w['word']} ({w['reading']})")
+            print(f"  생성: {w['id']} {w['word']} ({w['reading']})")
         w["audio"] = str(w["id"])
 
         # 예문: 한자 문장(example_ja)을 읽는다 → <id>_ex.mp3
@@ -162,20 +160,24 @@ def cmd_generate():
         if os.path.exists(out_ex) and os.path.getsize(out_ex) > 0:
             skipped += 1
         else:
-            synthesize(tts, client, w["example_ja"], VOICE_NAME, out_ex)
+            synthesize(tts, client, w["example_ja"], voice, out_ex)
             made += 1
-            print(f"  생성: {w['id']:>3}{EXAMPLE_SUFFIX} {w['example_ja']}")
+            print(f"  생성: {w['id']}{EXAMPLE_SUFFIX} {w['example_ja']}")
 
-    # words_n5.json 저장: 한 항목당 한 줄 형식 유지
-    with open(WORDS_PATH, "w", encoding="utf-8") as f:
-        f.write("[\n")
-        for i, w in enumerate(words):
-            sep = "," if i < len(words) - 1 else ""
-            f.write("  " + json.dumps(w, ensure_ascii=False) + sep + "\n")
-        f.write("]\n")
+    # words_<급수>.json 저장: 한 항목당 한 줄 형식 유지 (audio 필드 채움)
+    with open(words_path, "w", encoding="utf-8") as f:
+        lines = ["  " + json.dumps(w, ensure_ascii=False) for w in words]
+        f.write("[" + chr(10) + ("," + chr(10)).join(lines) + chr(10) + "]" + chr(10))
+    print(f"[{level} / {voice}] 새로 생성 {made}개, 건너뜀 {skipped}개 (단어+예문 파일 수)")
 
-    print(f"\n완료: 새로 생성 {made}개, 건너뜀 {skipped}개 (단어+예문 파일 수) → {os.path.relpath(out_dir, ROOT)}")
-    print(f"words_n5.json 의 audio 필드를 채웠습니다.")
+
+def cmd_generate(level=None, voice=None):
+    levels = [level] if level else LEVELS
+    voices = [voice] if voice else VOICE_NAMES
+    tts, client = make_client()
+    for lv in levels:
+        for vc in voices:
+            generate_level_voice(tts, client, lv, vc)
 
 
 def main():
@@ -184,6 +186,8 @@ def main():
     g.add_argument("--list-voices", action="store_true")
     g.add_argument("--samples", action="store_true")
     g.add_argument("--generate", action="store_true")
+    p.add_argument("--level", help="예: n5")
+    p.add_argument("--voice", help="예: ja-JP-Neural2-B")
     args = p.parse_args()
 
     setup_auth()
@@ -192,7 +196,7 @@ def main():
     elif args.samples:
         cmd_samples()
     elif args.generate:
-        cmd_generate()
+        cmd_generate(args.level, args.voice)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,10 @@ describe('설정', () => {
     expect(s.weightsByLevel.N5).toEqual({ A: 0, B: 3, C: 1 })
     expect(s.weightsByLevel.N4).toEqual(DEFAULT_SETTINGS.weightsByLevel.N4)
     expect(s.voice).toBe(DEFAULT_SETTINGS.voice)
+    expect(s.level).toBe('N5')
+    expect(s.onboarded).toBe(false)
+    expect(normalizeSettings({ level: 'N3', onboarded: true }).level).toBe('N3')
+    expect(normalizeSettings({ level: 'N9' }).level).toBe('N5')
   })
 
   it('모르는 급수는 N5 기본 비중을 쓴다', () => {

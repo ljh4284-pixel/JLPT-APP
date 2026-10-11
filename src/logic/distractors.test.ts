@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { wordsN5 } from '../data/words'
+import type { Word } from '../types'
+import wordsJson from '../data/words_n5.json'
 import { canMakeQuestion, isValidReading, makeDistractors, ruleOrder, toMorae } from './distractors'
 
+const wordsN5 = wordsJson as Word[]
 const byWord = (w: string) => {
   const found = wordsN5.find((x) => x.word === w)
   if (!found) throw new Error(`단어장에 없음: ${w}`)

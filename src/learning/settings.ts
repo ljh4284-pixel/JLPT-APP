@@ -5,11 +5,14 @@
  */
 import type { InputMode, QuestionType } from '../types'
 import { NEW_PER_SESSION } from '../config'
+import { LEVELS } from '../data/words'
 
 /** 유형별 비중 0~3. 0 이면 그 유형은 내지 않는다 */
 export type TypeWeights = Record<QuestionType, number>
 
 export interface Settings {
+  level: string                              // 현재 학습 급수 (홈에서 선택)
+  onboarded: boolean                         // 최초 실행 안내(목소리 선택)를 마쳤는지
   newPerDay: number                          // 하루 신규 단어 수 (1~20)
   weightsByLevel: Record<string, TypeWeights> // 급수별 문제 유형 비중
   inputMode: InputMode
@@ -30,6 +33,8 @@ export const DEFAULT_WEIGHTS: Record<string, TypeWeights> = {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  level: 'N5',
+  onboarded: false,
   newPerDay: NEW_PER_SESSION,
   weightsByLevel: DEFAULT_WEIGHTS,
   inputMode: 'romaji',
@@ -58,6 +63,8 @@ export function normalizeSettings(raw: unknown): Settings {
     }
   }
   return {
+    level: typeof r.level === 'string' && (LEVELS as readonly string[]).includes(r.level) ? r.level : 'N5',
+    onboarded: r.onboarded === true,
     newPerDay: clamp(r.newPerDay, MIN_NEW_PER_DAY, MAX_NEW_PER_DAY, DEFAULT_SETTINGS.newPerDay),
     weightsByLevel,
     inputMode: r.inputMode === 'kana' ? 'kana' : 'romaji',
