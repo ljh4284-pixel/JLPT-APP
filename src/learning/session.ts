@@ -1,0 +1,157 @@
+/**
+ * 세션 구성 (PROJECT.md 6장 세션 구성 규칙)
+ *  - 오늘 기한이 된 복습 카드 전부 + 신규 카드 N개
+ *  - 복습과 신규를 섞어서 출제
+ *  - 세션 내 오답(짧은 간격 상태가 된 카드)은 기한이 지나면 다시 출제
+ * 모두 순수 함수. 날짜는 항상 바깥에서 now 로 받는다.
+ */
+import { State } from 'ts-fsrs'
+import type { QuestionType, Rating, SessionCard, SessionMode, Word, WordProgress } from '../types'
+import { isShortTerm } from './scheduler'
+import { canMakeQuestion } from '../logic/distractors'
+import { NEW_PER_SESSION } from '../config'
+
+export interface Session {
+  queue: SessionCard[]                              // 아직 안 낸 카드
+  relearn: { card: SessionCard; due: Date }[]       // 세션 내 재출제 대기 (due 오름차순)
+  answered: number
+  correct: number                                   // '다시' 가 아닌 평가 수
+}
+
+export type NextStep =
+  | { kind: 'card'; card: SessionCard }
+  | { kind: 'wait'; due: Date; count: number }
+  | { kind: 'done' }
+
+/** 그날 23:59:59.999 */
+export function endOfDay(d: Date): Date {
+  const e = new Date(d)
+  e.setHours(23, 59, 59, 999)
+  return e
+}
+
+/** 오늘 복습해야 하는 카드인지 */
+export function isDueToday(p: WordProgress, now: Date): boolean {
+  const card = p.fsrs_card
+  // 짧은 간격 상태(다시/어려움 직후)는 그 시각이 실제로 지나야 낸다
+  if (isShortTerm(card)) return card.due.getTime() <= now.getTime()
+  // 보통 복습 카드는 오늘 안에 기한이면 낸다
+  return card.state === State.Review && card.due.getTime() <= endOfDay(now).getTime()
+}
+
+/** 오늘 복습 대상 단어 (기한 빠른 순) */
+export function dueWords(words: Word[], progress: WordProgress[], now: Date): Word[] {
+  const byId = new Map(words.map((w) => [w.id, w]))
+  return progress
+    .filter((p) => isDueToday(p, now))
+    .sort((a, b) => a.fsrs_card.due.getTime() - b.fsrs_card.due.getTime())
+    .map((p) => byId.get(p.word_id))
+    .filter((w): w is Word => w !== undefined)
+}
+
+/** 아직 한 번도 안 본 단어 중 앞에서 limit 개 */
+export function newWords(words: Word[], progress: WordProgress[], limit = NEW_PER_SESSION): Word[] {
+  const seen = new Set(progress.map((p) => p.word_id))
+  return words.filter((w) => !seen.has(w.id)).slice(0, limit)
+}
+
+/** 내일까지 기한인 카드 수 (오늘 기한은 제외) */
+export function dueTomorrowCount(progress: WordProgress[], now: Date): number {
+  const today = endOfDay(now).getTime()
+  const tomorrow = today + 24 * 60 * 60 * 1000
+  return progress.filter((p) => {
+    const t = p.fsrs_card.due.getTime()
+    return t > today && t <= tomorrow
+  }).length
+}
+
+/** 신규(b)를 복습(a) 사이에 고르게 끼워 넣는다 */
+export function interleave<T>(a: T[], b: T[]): T[] {
+  const out: T[] = []
+  let ai = 0
+  let bi = 0
+  while (ai < a.length || bi < b.length) {
+    if (ai >= a.length) out.push(b[bi++])
+    else if (bi >= b.length) out.push(a[ai++])
+    else if (bi * a.length < ai * b.length) out.push(b[bi++])   // 신규가 뒤처지면 신규
+    else out.push(a[ai++])
+  }
+  return out
+}
+
+/** 뜻 회상(A) 또는 발음 입력(C)에서 한 번이라도 맞힌 적이 있는지 */
+export function answeredCorrectlyBefore(p: WordProgress | undefined): boolean {
+  if (!p) return false
+  return p.review_log.some(
+    (e) => (e.question_type === 'A' && e.rating !== 'again') || (e.question_type === 'C' && e.result === 'correct'),
+  )
+}
+
+/**
+ * 읽기 고르기(B)를 낼 수 있는 단어인지 (PROJECT.md 3장 B 적용 조건)
+ *  - A 또는 C 에서 최소 1회 맞힌 후부터. 신규 첫 노출에는 쓰지 않음
+ *  - 유효한 오답 3개 이상
+ */
+export function canAskB(word: Word, p: WordProgress | undefined): boolean {
+  return answeredCorrectlyBefore(p) && canMakeQuestion(word)
+}
+
+/**
+ * 카드에 낼 문제 유형.
+ *  - 신규: 뜻 회상 ↔ 발음 입력 번갈아
+ *  - 복습: 뜻 회상 → 발음 입력 → 읽기 고르기 순환 (읽기 고르기를 못 내는 단어는 뜻 회상)
+ *  - mode 'A' / 'C' 는 그 유형만 (6단계 비중 설정 전까지의 임시 선택지)
+ */
+function typeFor(mode: SessionMode, position: number, isNew: boolean, bAllowed: boolean): QuestionType {
+  if (mode === 'A' || mode === 'C') return mode
+  if (!isNew && position % 3 === 2) return bAllowed ? 'B' : 'A'
+  return position % 2 === 0 ? 'A' : 'C'
+}
+
+/** 오늘의 세션을 만든다 */
+export function buildSession(words: Word[], progress: WordProgress[], now: Date, mode: SessionMode): Session {
+  const byId = new Map(progress.map((p) => [p.word_id, p]))
+  const reviews = dueWords(words, progress, now).map((word) => ({ word, isNew: false }))
+  const fresh = newWords(words, progress).map((word) => ({ word, isNew: true }))
+  const mixed = interleave(reviews, fresh)
+  const queue: SessionCard[] = mixed.map((c, i) => ({
+    ...c,
+    questionType: typeFor(mode, i, c.isNew, canAskB(c.word, byId.get(c.word.id))),
+  }))
+  return { queue, relearn: [], answered: 0, correct: 0 }
+}
+
+/** 다음에 할 일. force=true 면 재출제 카드를 기한 전이라도 꺼낸다 */
+export function peekNext(s: Session, now: Date, force = false): NextStep {
+  const first = s.relearn[0]
+  if (first && (force || first.due.getTime() <= now.getTime())) return { kind: 'card', card: first.card }
+  if (s.queue.length > 0) return { kind: 'card', card: s.queue[0] }
+  if (first) return { kind: 'wait', due: first.due, count: s.relearn.length }
+  return { kind: 'done' }
+}
+
+/** peekNext 가 고른 카드를 대기열에서 뺀 세션 */
+export function takeNext(s: Session, now: Date, force = false): [NextStep, Session] {
+  const step = peekNext(s, now, force)
+  if (step.kind !== 'card') return [step, s]
+  if (s.relearn[0]?.card === step.card) return [step, { ...s, relearn: s.relearn.slice(1) }]
+  return [step, { ...s, queue: s.queue.slice(1) }]
+}
+
+/**
+ * 평가 후 세션 갱신. 짧은 간격 상태가 되면 재출제 대기에 넣는다.
+ * 재출제 카드는 이미 한 번 본 뒤이므로, 읽기 고르기를 낼 수 있으면 그것을, 아니면 발음 입력을 낸다.
+ */
+export function afterRating(s: Session, card: SessionCard, rating: Rating, progress: WordProgress): Session {
+  const next: Session = {
+    ...s,
+    answered: s.answered + 1,
+    correct: s.correct + (rating === 'again' ? 0 : 1),
+  }
+  if (isShortTerm(progress.fsrs_card)) {
+    const questionType: QuestionType = canAskB(card.word, progress) ? 'B' : 'C'
+    const item = { card: { ...card, isNew: false, questionType }, due: progress.fsrs_card.due }
+    next.relearn = [...s.relearn, item].sort((x, y) => x.due.getTime() - y.due.getTime())
+  }
+  return next
+}
