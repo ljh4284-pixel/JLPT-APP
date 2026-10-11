@@ -23,9 +23,6 @@ export type Rating = 'again' | 'hard' | 'good' | 'easy'
 /** 문제 유형 (PROJECT.md 3장). A 뜻 회상, B 읽기 고르기, C 발음 입력 */
 export type QuestionType = 'A' | 'B' | 'C'
 
-/** 세션에서 어떤 유형을 낼지 (홈에서 선택) */
-export type SessionMode = 'A' | 'C' | 'mix'
-
 /** 유형 C 입력 방식: 로마자(실시간 히라가나 변환) / 일본어 자판 직접 입력 */
 export type InputMode = 'romaji' | 'kana'
 

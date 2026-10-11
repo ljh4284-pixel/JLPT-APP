@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { InputMode, JudgeResult, QuestionType, Rating, SessionCard } from './types'
+import type { JudgeResult, Rating, SessionCard } from './types'
 import { wordsN5 } from './data/words'
 import {
   allProgress,
@@ -20,7 +20,16 @@ import {
   takeNext,
   type Session,
 } from './learning/session'
+import {
+  normalizeSettings,
+  SETTINGS_KEY,
+  TYPE_LABEL,
+  weightsFor,
+  type Settings as SettingsValue,
+} from './learning/settings'
+import { accuracyStats, levelStats } from './learning/stats'
 import { backupFilename, parseBackup, serializeBackup } from './learning/backup'
+import { setVoice } from './platform/audio'
 import { downloadText, pickTextFile } from './platform/file'
 import { getSetting, loadAllSettings, replaceAllSettings, setSetting } from './platform/storage'
 import { Home } from './screens/Home'
@@ -31,23 +40,22 @@ import { QuestionC } from './screens/QuestionC'
 import { Feedback } from './screens/Feedback'
 import { Waiting } from './screens/Waiting'
 import { Done } from './screens/Done'
+import { Progress } from './screens/Progress'
+import { Settings } from './screens/Settings'
 
-/** 화면 단계: 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료 */
-type Phase = 'loading' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done'
+/** 화면 단계: 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료. 홈에서 진도·설정으로 */
+type Phase = 'loading' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done' | 'progress' | 'settings'
 
 const LEVEL = 'N5'
 
-/** 화면에 보여줄 유형 이름 (A/B/C 같은 기호는 사용자에게 보이지 않게) */
-const TYPE_LABEL: Record<QuestionType, string> = { A: '뜻 회상', B: '읽기 고르기', C: '발음 입력' }
-
 const EMPTY_SESSION: Session = { queue: [], relearn: [], answered: 0, correct: 0 }
 
-/** 설정 키 (저장소의 settings 테이블) */
-const SETTING_INPUT_MODE = 'inputMode'
+/** 쓸 수 있는 목소리 (7단계에서 추가). 이름은 gen_audio.py 의 VOICE_NAME 과 같다 */
+const VOICES = [{ name: 'ja-JP-Chirp3-HD-Charon', label: 'Charon (남성)' }]
 
 function App() {
   const [phase, setPhase] = useState<Phase>('loading')
-  const [inputMode, setInputModeState] = useState<InputMode>('romaji')
+  const [settings, setSettingsState] = useState<SettingsValue>(() => normalizeSettings(undefined))
   const [session, setSession] = useState<Session>(EMPTY_SESSION)
   const [current, setCurrent] = useState<SessionCard | null>(null)
   const [result, setResult] = useState<JudgeResult | undefined>(undefined)
@@ -63,8 +71,17 @@ function App() {
     ;(async () => {
       try {
         await initProgress()
-        const saved = await getSetting<InputMode>(SETTING_INPUT_MODE)
-        if (!cancelled && (saved === 'romaji' || saved === 'kana')) setInputModeState(saved)
+        let raw = await getSetting<unknown>(SETTINGS_KEY)
+        if (raw === undefined) {
+          // 5단계에서 따로 저장하던 입력 방식 값이 있으면 가져온다
+          const oldInputMode = await getSetting<string>('inputMode')
+          if (oldInputMode) raw = { inputMode: oldInputMode }
+        }
+        const s = normalizeSettings(raw)
+        if (!cancelled) {
+          setSettingsState(s)
+          setVoice(s.voice)
+        }
       } catch (e) {
         console.error('저장소 읽기 실패', e)
         if (!cancelled) setMessage('저장된 기록을 읽지 못했습니다. 이번에는 기록이 저장되지 않을 수 있습니다.')
@@ -105,14 +122,17 @@ function App() {
     return () => clearInterval(id)
   })
 
+  const weights = weightsFor(settings, LEVEL)
+
   function start() {
     setMessage(null)
-    advance(buildSession(words, allProgress(), new Date(), 'mix'))
+    advance(buildSession(words, allProgress(), new Date(), { newPerDay: settings.newPerDay, weights }))
   }
 
-  function setInputMode(mode: InputMode) {
-    setInputModeState(mode)
-    void setSetting(SETTING_INPUT_MODE, mode)
+  function updateSettings(next: SettingsValue) {
+    setSettingsState(next)
+    setVoice(next.voice)
+    void setSetting(SETTINGS_KEY, next)
   }
 
   /** 읽기 고르기(B)·발음 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
@@ -131,14 +151,14 @@ function App() {
       `[자기평가] ${TYPE_LABEL[current.questionType]} id=${current.word.id} ${current.word.word} (${current.word.reading}) → ${rating}${detail}` +
         ` | 다음 복습 ${formatInterval(at, progress.fsrs_card.due)} 뒤 (${progress.fsrs_card.due.toLocaleString()})`,
     )
-    advance(afterRating(session, current, rating, progress))
+    advance(afterRating(session, current, rating, progress, weights))
   }
 
   // ---- 기록 내보내기 / 불러오기 / 초기화 ----
   async function exportBackup() {
-    const settings = await loadAllSettings()
+    const all = await loadAllSettings()
     const at = new Date()
-    downloadText(backupFilename(at), serializeBackup(allProgress(), settings, at))
+    downloadText(backupFilename(at), serializeBackup(allProgress(), all, at))
     setMessage('백업 파일을 내려받았습니다')
   }
 
@@ -146,11 +166,12 @@ function App() {
     const text = await pickTextFile()
     if (text === null) return
     try {
-      const { progress, settings } = parseBackup(text)
+      const { progress, settings: restored } = parseBackup(text)
       await replaceProgress(progress)
-      await replaceAllSettings(settings)
-      const saved = settings[SETTING_INPUT_MODE]
-      if (saved === 'romaji' || saved === 'kana') setInputModeState(saved)
+      await replaceAllSettings(restored)
+      const s = normalizeSettings(restored[SETTINGS_KEY])
+      setSettingsState(s)
+      setVoice(s.voice)
       setMessage(`기록 ${progress.length}개를 불러왔습니다`)
     } catch (e) {
       setMessage(`불러오기 실패: ${e instanceof Error ? e.message : String(e)}`)
@@ -165,7 +186,7 @@ function App() {
   // ---- 화면별 표시값 ----
   const progressList = allProgress()
   const dueCount = dueWords(words, progressList, now).length
-  const newCount = newWords(words, progressList).length
+  const newCount = newWords(words, progressList, settings.newPerDay).length
 
   const intervals = current
     ? (() => {
@@ -185,7 +206,7 @@ function App() {
 
   return (
     <div className="app">
-      {current && phase !== 'home' && phase !== 'done' && phase !== 'wait' && (
+      {current && (phase === 'present' || phase === 'question' || phase === 'feedback') && (
         <header className="topbar">
           <span>
             {LEVEL} · {TYPE_LABEL[current.questionType]}
@@ -208,9 +229,28 @@ function App() {
           learnedCount={progressList.length}
           message={message}
           onStart={start}
+          onProgress={() => setPhase('progress')}
+          onSettings={() => { setMessage(null); setPhase('settings') }}
+        />
+      )}
+      {phase === 'progress' && (
+        <Progress
+          levels={[levelStats(words, progressList, LEVEL)]}
+          accuracy={accuracyStats(progressList, now)}
+          onClose={() => setPhase('home')}
+        />
+      )}
+      {phase === 'settings' && (
+        <Settings
+          level={LEVEL}
+          settings={settings}
+          voices={VOICES}
+          message={message}
+          onChange={updateSettings}
           onExport={() => void exportBackup()}
           onImport={() => void importBackup()}
           onReset={() => void resetAll()}
+          onClose={() => { setMessage(null); setPhase('home') }}
         />
       )}
       {phase === 'present' && current && <Present word={current.word} onNext={() => setPhase('question')} />}
@@ -224,8 +264,8 @@ function App() {
         <QuestionC
           key={`${current.word.id}-${session.answered}`}
           word={current.word}
-          inputMode={inputMode}
-          onInputModeChange={setInputMode}
+          inputMode={settings.inputMode}
+          onInputModeChange={(m) => updateSettings({ ...settings, inputMode: m })}
           onSubmit={submitJudged}
         />
       )}

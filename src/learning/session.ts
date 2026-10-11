@@ -6,10 +6,11 @@
  * 모두 순수 함수. 날짜는 항상 바깥에서 now 로 받는다.
  */
 import { State } from 'ts-fsrs'
-import type { QuestionType, Rating, SessionCard, SessionMode, Word, WordProgress } from '../types'
+import type { QuestionType, Rating, SessionCard, Word, WordProgress } from '../types'
 import { isShortTerm } from './scheduler'
 import { canMakeQuestion } from '../logic/distractors'
 import { NEW_PER_SESSION } from '../config'
+import { typeCycle, type TypeWeights } from './settings'
 
 export interface Session {
   queue: SessionCard[]                              // 아직 안 낸 카드
@@ -96,27 +97,37 @@ export function canAskB(word: Word, p: WordProgress | undefined): boolean {
   return answeredCorrectlyBefore(p) && canMakeQuestion(word)
 }
 
+export interface SessionOptions {
+  newPerDay: number       // 신규 단어 수
+  weights: TypeWeights    // 문제 유형 비중 (설정 화면)
+}
+
 /**
- * 카드에 낼 문제 유형.
- *  - 신규: 뜻 회상 ↔ 발음 입력 번갈아
- *  - 복습: 뜻 회상 → 발음 입력 → 읽기 고르기 순환 (읽기 고르기를 못 내는 단어는 뜻 회상)
- *  - mode 'A' / 'C' 는 그 유형만 (6단계 비중 설정 전까지의 임시 선택지)
+ * 카드에 낼 문제 유형. 비중에서 만든 순환 순서(typeCycle)를 카드 순서대로 돈다.
+ *  - 신규 카드는 읽기 고르기를 내지 않는다 (첫 노출 금지) → 순환에서 B 를 뺀 순서를 쓴다
+ *  - 복습 카드에서 읽기 고르기 차례인데 그 단어가 조건 미달이면 뜻 회상
  */
-function typeFor(mode: SessionMode, position: number, isNew: boolean, bAllowed: boolean): QuestionType {
-  if (mode === 'A' || mode === 'C') return mode
-  if (!isNew && position % 3 === 2) return bAllowed ? 'B' : 'A'
-  return position % 2 === 0 ? 'A' : 'C'
+export function typeFor(cycle: QuestionType[], position: number, isNew: boolean, bAllowed: boolean): QuestionType {
+  if (isNew) {
+    const noB = cycle.filter((t) => t !== 'B')
+    return noB.length > 0 ? noB[position % noB.length] : 'A'
+  }
+  const t = cycle[position % cycle.length]
+  return t === 'B' && !bAllowed ? 'A' : t
 }
 
 /** 오늘의 세션을 만든다 */
-export function buildSession(words: Word[], progress: WordProgress[], now: Date, mode: SessionMode): Session {
+export function buildSession(words: Word[], progress: WordProgress[], now: Date, options: SessionOptions): Session {
   const byId = new Map(progress.map((p) => [p.word_id, p]))
+  const cycle = typeCycle(options.weights)
   const reviews = dueWords(words, progress, now).map((word) => ({ word, isNew: false }))
-  const fresh = newWords(words, progress).map((word) => ({ word, isNew: true }))
+  const fresh = newWords(words, progress, options.newPerDay).map((word) => ({ word, isNew: true }))
   const mixed = interleave(reviews, fresh)
-  const queue: SessionCard[] = mixed.map((c, i) => ({
+  let reviewPos = 0
+  let newPos = 0
+  const queue: SessionCard[] = mixed.map((c) => ({
     ...c,
-    questionType: typeFor(mode, i, c.isNew, canAskB(c.word, byId.get(c.word.id))),
+    questionType: typeFor(cycle, c.isNew ? newPos++ : reviewPos++, c.isNew, canAskB(c.word, byId.get(c.word.id))),
   }))
   return { queue, relearn: [], answered: 0, correct: 0 }
 }
@@ -140,16 +151,17 @@ export function takeNext(s: Session, now: Date, force = false): [NextStep, Sessi
 
 /**
  * 평가 후 세션 갱신. 짧은 간격 상태가 되면 재출제 대기에 넣는다.
- * 재출제 카드는 이미 한 번 본 뒤이므로, 읽기 고르기를 낼 수 있으면 그것을, 아니면 발음 입력을 낸다.
+ * 재출제 카드는 이미 한 번 본 뒤이므로, 읽기 고르기를 낼 수 있으면 그것을,
+ * 아니면 발음 입력(비중이 0 이면 뜻 회상)을 낸다.
  */
-export function afterRating(s: Session, card: SessionCard, rating: Rating, progress: WordProgress): Session {
+export function afterRating(s: Session, card: SessionCard, rating: Rating, progress: WordProgress, weights?: TypeWeights): Session {
   const next: Session = {
     ...s,
     answered: s.answered + 1,
     correct: s.correct + (rating === 'again' ? 0 : 1),
   }
   if (isShortTerm(progress.fsrs_card)) {
-    const questionType: QuestionType = canAskB(card.word, progress) ? 'B' : 'C'
+    const questionType: QuestionType = canAskB(card.word, progress) ? 'B' : weights && weights.C === 0 ? 'A' : 'C'
     const item = { card: { ...card, isNew: false, questionType }, due: progress.fsrs_card.due }
     next.relearn = [...s.relearn, item].sort((x, y) => x.due.getTime() - y.due.getTime())
   }

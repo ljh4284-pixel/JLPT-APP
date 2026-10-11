@@ -7,8 +7,14 @@
  */
 import type { Word } from '../types'
 
-/** gen_audio.py 의 VOICE_NAME 과 같아야 한다 */
-const VOICE_NAME = 'ja-JP-Chirp3-HD-Charon'
+/** 기본 목소리. gen_audio.py 의 VOICE_NAME 과 같아야 한다. 설정 화면에서 setVoice 로 바꾼다 */
+const DEFAULT_VOICE = 'ja-JP-Chirp3-HD-Charon'
+let VOICE_NAME = DEFAULT_VOICE
+
+/** 재생에 쓸 목소리 폴더 이름을 바꾼다 (설정 화면) */
+export function setVoice(name: string): void {
+  VOICE_NAME = name || DEFAULT_VOICE
+}
 /** gen_audio.py 의 EXAMPLE_SUFFIX 와 같아야 한다 */
 const EXAMPLE_SUFFIX = '_ex'
 
