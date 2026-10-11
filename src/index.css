@@ -181,3 +181,9 @@ body { background: var(--bg); }
 .actions.grid2x2 { grid-template-columns: 1fr 1fr; }
 .btn.option { min-height: 64px; font-size: 24px; font-weight: 600; }
 .wrong-point { color: var(--text); font-size: 15px; }
+
+/* ---- 5단계: 기록 내보내기/불러오기/초기화 ---- */
+.data-row { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.link { background: none; border: none; padding: 6px 4px; font-size: 14px; color: var(--primary); cursor: pointer; text-decoration: underline; }
+.link.danger { color: var(--again); font-weight: 600; }
+.message { margin-top: 12px !important; font-size: 14px; color: var(--text); background: var(--bg); padding: 8px 12px; border-radius: 8px; }

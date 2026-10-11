@@ -2,7 +2,7 @@ import type { Card } from 'ts-fsrs'
 
 /** 단어장 한 항목 (PROJECT.md 7장) */
 export interface Word {
-  id: number
+  id: string             // 급수 접두사 문자열 (예: n5-0001). 한 번 쓴 id 는 재사용하지 않는다
   level: string
   word: string            // 표기 (한자 또는 가나)
   reading: string         // 히라가나 읽기. 정답 판정 기준
@@ -43,14 +43,16 @@ export interface ReviewLogEntry {
   question_type: QuestionType
   result: 'correct' | 'wrong' | null    // 자동 판정 결과. 유형 A 는 null
   rating: Rating
+  duration_ms?: number                  // 카드가 보인 뒤 평가까지 걸린 시간 (8단계 계획 계산용)
 }
 
 /** 단어 하나의 학습 상태 (PROJECT.md 7장) */
 export interface WordProgress {
-  word_id: number
+  word_id: string
   level: string
   fsrs_card: Card       // ts-fsrs 카드 (difficulty, stability, due, state, reps, lapses, last_review ...)
   review_log: ReviewLogEntry[]
+  known_by_test?: boolean   // 레벨 테스트로 "안다"고 판정된 단어 (8단계). 없으면 false
 }
 
 /** 세션 대기열의 카드 한 장 */

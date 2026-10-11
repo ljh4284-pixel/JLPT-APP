@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { InputMode, JudgeResult, QuestionType, Rating, SessionCard } from './types'
 import { wordsN5 } from './data/words'
-import { allProgress, currentCard, recordReview } from './learning/progress'
+import {
+  allProgress,
+  currentCard,
+  initProgress,
+  recordReview,
+  replaceProgress,
+  resetProgress,
+} from './learning/progress'
 import { formatInterval, previewDue } from './learning/scheduler'
 import {
   afterRating,
@@ -13,6 +20,9 @@ import {
   takeNext,
   type Session,
 } from './learning/session'
+import { backupFilename, parseBackup, serializeBackup } from './learning/backup'
+import { downloadText, pickTextFile } from './platform/file'
+import { getSetting, loadAllSettings, replaceAllSettings, setSetting } from './platform/storage'
 import { Home } from './screens/Home'
 import { Present } from './screens/Present'
 import { QuestionA } from './screens/QuestionA'
@@ -23,24 +33,48 @@ import { Waiting } from './screens/Waiting'
 import { Done } from './screens/Done'
 
 /** 화면 단계: 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료 */
-type Phase = 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done'
+type Phase = 'loading' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done'
 
 const LEVEL = 'N5'
 
-/** 화면에 보여줄 유형 이름 (A/C 같은 기호는 사용자에게 보이지 않게) */
+/** 화면에 보여줄 유형 이름 (A/B/C 같은 기호는 사용자에게 보이지 않게) */
 const TYPE_LABEL: Record<QuestionType, string> = { A: '뜻 회상', B: '읽기 고르기', C: '발음 입력' }
 
 const EMPTY_SESSION: Session = { queue: [], relearn: [], answered: 0, correct: 0 }
 
+/** 설정 키 (저장소의 settings 테이블) */
+const SETTING_INPUT_MODE = 'inputMode'
+
 function App() {
-  const [phase, setPhase] = useState<Phase>('home')
-  const [inputMode, setInputMode] = useState<InputMode>('romaji')
+  const [phase, setPhase] = useState<Phase>('loading')
+  const [inputMode, setInputModeState] = useState<InputMode>('romaji')
   const [session, setSession] = useState<Session>(EMPTY_SESSION)
   const [current, setCurrent] = useState<SessionCard | null>(null)
   const [result, setResult] = useState<JudgeResult | undefined>(undefined)
+  const [cardShownAt, setCardShownAt] = useState(0)   // 카드가 보인 시각 (소요 시간 측정)
+  const [message, setMessage] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())   // 화면 표시용 현재 시각 (1초마다 갱신)
 
   const words = wordsN5
+
+  // 앱 시작: 저장소에서 학습 기록과 설정을 읽는다
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        await initProgress()
+        const saved = await getSetting<InputMode>(SETTING_INPUT_MODE)
+        if (!cancelled && (saved === 'romaji' || saved === 'kana')) setInputModeState(saved)
+      } catch (e) {
+        console.error('저장소 읽기 실패', e)
+        if (!cancelled) setMessage('저장된 기록을 읽지 못했습니다. 이번에는 기록이 저장되지 않을 수 있습니다.')
+      }
+      if (!cancelled) setPhase('home')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   /** 세션에서 다음 할 일을 꺼내 화면을 정한다 */
   function advance(s: Session, force = false) {
@@ -49,6 +83,7 @@ function App() {
     setResult(undefined)
     if (step.kind === 'card') {
       setCurrent(step.card)
+      setCardShownAt(Date.now())
       setPhase(step.card.isNew ? 'present' : 'question')
     } else if (step.kind === 'wait') {
       setCurrent(null)
@@ -71,8 +106,13 @@ function App() {
   })
 
   function start() {
-    // 문제 유형은 항상 뜻 회상과 발음 입력을 번갈아 낸다 (유형 비중 설정은 6단계)
+    setMessage(null)
     advance(buildSession(words, allProgress(), new Date(), 'mix'))
+  }
+
+  function setInputMode(mode: InputMode) {
+    setInputModeState(mode)
+    void setSetting(SETTING_INPUT_MODE, mode)
   }
 
   /** 읽기 고르기(B)·발음 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
@@ -85,13 +125,41 @@ function App() {
     if (!current) return
     const at = new Date()
     const judged = result ? (result.correct ? 'correct' : 'wrong') : null
-    const progress = recordReview(current.word, current.questionType, rating, judged, at)
+    const progress = recordReview(current.word, current.questionType, rating, judged, at, Date.now() - cardShownAt)
     const detail = result ? ` 판정=${result.correct ? '정답' : '오답'} 입력="${result.answer}" 힌트=${result.hintUsed}` : ''
     console.log(
       `[자기평가] ${TYPE_LABEL[current.questionType]} id=${current.word.id} ${current.word.word} (${current.word.reading}) → ${rating}${detail}` +
         ` | 다음 복습 ${formatInterval(at, progress.fsrs_card.due)} 뒤 (${progress.fsrs_card.due.toLocaleString()})`,
     )
     advance(afterRating(session, current, rating, progress))
+  }
+
+  // ---- 기록 내보내기 / 불러오기 / 초기화 ----
+  async function exportBackup() {
+    const settings = await loadAllSettings()
+    const at = new Date()
+    downloadText(backupFilename(at), serializeBackup(allProgress(), settings, at))
+    setMessage('백업 파일을 내려받았습니다')
+  }
+
+  async function importBackup() {
+    const text = await pickTextFile()
+    if (text === null) return
+    try {
+      const { progress, settings } = parseBackup(text)
+      await replaceProgress(progress)
+      await replaceAllSettings(settings)
+      const saved = settings[SETTING_INPUT_MODE]
+      if (saved === 'romaji' || saved === 'kana') setInputModeState(saved)
+      setMessage(`기록 ${progress.length}개를 불러왔습니다`)
+    } catch (e) {
+      setMessage(`불러오기 실패: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  async function resetAll() {
+    await resetProgress()
+    setMessage('기록을 모두 지웠습니다')
   }
 
   // ---- 화면별 표시값 ----
@@ -127,12 +195,22 @@ function App() {
         </header>
       )}
 
+      {phase === 'loading' && (
+        <main className="content center">
+          <p className="muted">불러오는 중…</p>
+        </main>
+      )}
       {phase === 'home' && (
         <Home
           level={LEVEL}
           dueCount={dueCount}
           newCount={newCount}
+          learnedCount={progressList.length}
+          message={message}
           onStart={start}
+          onExport={() => void exportBackup()}
+          onImport={() => void importBackup()}
+          onReset={() => void resetAll()}
         />
       )}
       {phase === 'present' && current && <Present word={current.word} onNext={() => setPhase('question')} />}
