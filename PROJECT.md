@@ -137,6 +137,7 @@
 - ts-fsrs (스케줄링), Dexie.js (IndexedDB), wanakana (로마자→가나 변환)
 - 음성: Google Cloud TTS로 사전 생성한 mp3 + Web Speech API 폴백
 - 음성 생성 스크립트: Python (개발용, 앱에 포함되지 않음)
+- 자동 테스트: vitest (개발용. 판정·오답 생성·세션·스케줄러·백업 같은 순수 함수 모듈을 검사. 2026-10-12 추가)
 - 배포 1차: GitHub Pages 또는 Vercel, PWA로 홈 화면 설치
 - 배포 2차: Capacitor로 iOS·Android 앱 포장 후 스토어 출시
 - 런타임 서버·DB·AI 호출 없음. 모든 계산과 저장은 사용자 기기에서
