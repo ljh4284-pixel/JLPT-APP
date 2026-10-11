@@ -28,7 +28,7 @@ VOICE_NAMES = ["ja-JP-Chirp3-HD-Charon", "ja-JP-Neural2-B"]   # 앱에서 고를
 LANGUAGE_CODE = "ja-JP"
 SPEAKING_RATE = 1.0      # 기본 속도
 AUDIO_FORMAT = "MP3"
-LEVELS = ["n5"]          # 단어장 파일(src/data/words_<급수>.json)이 있는 급수
+LEVELS = ["n5", "n4"]    # 단어장 파일(src/data/words_<급수>.json)이 있는 급수
 EXAMPLE_SUFFIX = "_ex"   # 예문 파일명: <id>_ex.mp3 (앱의 src/platform/audio.ts 와 같아야 함)
 
 SAMPLE_SENTENCE = "病院は美容院の隣です。"

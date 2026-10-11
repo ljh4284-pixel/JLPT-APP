@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WORDS_PATH = os.path.join(ROOT, "src", "data", "words_n5.json")
+WORDS_GLOB = os.path.join(ROOT, "src", "data", "words_n*.json")
 DICT_GLOB = os.path.join(ROOT, "scripts", "data", "jmdict-eng-common-*.json")
 REPORT_PATH = os.path.join(ROOT, "scripts", "verify_report.txt")
 
@@ -82,8 +82,11 @@ def main():
     entries = data["words"]
     by_kanji, by_kana = build_indexes(entries)
 
-    with open(WORDS_PATH, encoding="utf-8") as f:
-        words = json.load(f)
+    word_files = sorted(glob.glob(WORDS_GLOB), reverse=True)   # n5, n4, ... 순
+    words = []
+    for wf in word_files:
+        with open(wf, encoding="utf-8") as f:
+            words.extend(json.load(f))
 
     matched, mismatched, missing = [], [], []
 
@@ -159,7 +162,7 @@ def main():
     lines.append("읽기 검증 보고서 (words_n5.json vs JMdict)")
     lines.append(f"생성 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"사전: {os.path.basename(dict_path)}  (JMdict 날짜 {data.get('dictDate')}, 항목 {len(entries)}개, common only)")
-    lines.append(f"대상: {os.path.relpath(WORDS_PATH, ROOT)}  ({len(words)}개)")
+    lines.append("대상: " + ", ".join(os.path.basename(wf) for wf in word_files) + f"  (합계 {len(words)}개)")
     lines.append("")
     lines.append(f"요약: 일치 {len(matched)} / 불일치 {len(mismatched)} / 사전에 없음 {len(missing)} / 형식 문제 {len(format_issues)}")
     lines.append("")
