@@ -64,9 +64,15 @@ describe('오답 생성 규칙', () => {
     }
   })
 
-  it('N5 50개 중 유효 오답이 3개 미만인 단어는 電話·見る·買う 뿐이다', () => {
-    const excluded = wordsN5.filter((w) => !canMakeQuestion(w)).map((w) => w.word)
+  it('처음 50개 중 유효 오답이 3개 미만인 단어는 電話·見る·買う 뿐이다', () => {
+    const first50 = wordsN5.filter((w) => w.id <= 'n5-0050')
+    const excluded = first50.filter((w) => !canMakeQuestion(w)).map((w) => w.word)
     expect(excluded).toEqual(['電話', '見る', '買う'])
+  })
+
+  it('전체 단어 중 읽기 고르기를 낼 수 있는 단어가 80% 이상이다', () => {
+    const ok = wordsN5.filter((w) => canMakeQuestion(w)).length
+    expect(ok / wordsN5.length).toBeGreaterThanOrEqual(0.8)
   })
 
   it('같은 단어에는 항상 같은 오답이 나온다 (무작위 없음)', () => {

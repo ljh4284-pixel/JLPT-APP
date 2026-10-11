@@ -87,6 +87,25 @@ def main():
 
     matched, mismatched, missing = [], [], []
 
+    # ---- 형식 검사: id 형식·중복, 표기 중복, 예문 읽기가 가나로만 되어 있는지 ----
+    format_issues = []
+    seen_ids, seen_words = set(), set()
+    import re as _re
+    for w in words:
+        if not _re.fullmatch(r"n[1-5]-\d{4}", str(w["id"])):
+            format_issues.append(f"{w['id']}: id 형식이 n5-0001 꼴이 아님")
+        if w["id"] in seen_ids:
+            format_issues.append(f"{w['id']}: id 중복")
+        seen_ids.add(w["id"])
+        if w["word"] in seen_words:
+            format_issues.append(f"{w['id']} {w['word']}: 표기 중복")
+        seen_words.add(w["word"])
+        bad = [ch for ch in w["example_reading"] if not (is_kana(ch) or ch in "、。！？ 　ー")]
+        if bad:
+            format_issues.append(f"{w['id']} {w['word']}: 예문 읽기에 가나가 아닌 글자 {''.join(bad)}")
+        if not w["example_ja"].endswith("。") and not w["example_ja"].endswith("？"):
+            format_issues.append(f"{w['id']} {w['word']}: 예문이 。로 끝나지 않음")
+
     for w in words:
         word, reading = w["word"], w["reading"]
         kana_only = all(is_kana(ch) for ch in word)
@@ -142,8 +161,13 @@ def main():
     lines.append(f"사전: {os.path.basename(dict_path)}  (JMdict 날짜 {data.get('dictDate')}, 항목 {len(entries)}개, common only)")
     lines.append(f"대상: {os.path.relpath(WORDS_PATH, ROOT)}  ({len(words)}개)")
     lines.append("")
-    lines.append(f"요약: 일치 {len(matched)} / 불일치 {len(mismatched)} / 사전에 없음 {len(missing)}")
+    lines.append(f"요약: 일치 {len(matched)} / 불일치 {len(mismatched)} / 사전에 없음 {len(missing)} / 형식 문제 {len(format_issues)}")
     lines.append("")
+    if format_issues:
+        lines.append(f"== 형식 문제 ({len(format_issues)}) ==")
+        for f_ in format_issues:
+            lines.append("  " + f_)
+        lines.append("")
 
     lines.append(f"== 일치 ({len(matched)}) ==")
     for w, note in matched:

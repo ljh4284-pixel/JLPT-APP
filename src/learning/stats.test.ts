@@ -24,7 +24,7 @@ describe('진도 통계', () => {
       { word_id: 'n5-0002', level: 'N5', fsrs_card: stable, review_log: [] },
       { word_id: 'n4-0001', level: 'N4', fsrs_card: stable, review_log: [] },   // 다른 급수는 제외
     ]
-    expect(levelStats(wordsN5, progress, 'N5')).toEqual({ level: 'N5', total: 50, learned: 2, stable: 1 })
+    expect(levelStats(wordsN5, progress, 'N5')).toEqual({ level: 'N5', total: wordsN5.length, learned: 2, stable: 1 })
   })
 
   it('정답률·등급·소요 시간·오늘 평가 수를 계산한다', () => {
