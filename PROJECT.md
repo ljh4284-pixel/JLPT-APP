@@ -115,6 +115,7 @@
 ## 7. 데이터 구조
 ### 단어장 (words_n5.json ~ words_n1.json, 앱에 포함)
 { id, level, word, reading, meaning_ko, example_ja, example_reading, example_ko, pos, tags, confusion, hanja_ko, audio }
+- id: 급수 접두사 문자열 "n5-0001" 형식 (2026-10-12부터). 학습 기록이 이 id로 저장되므로 한 번 쓴 id는 단어를 지워도 재사용하지 않는다
 - word: 표기 (한자 또는 가나). 가나만 쓰는 단어는 word와 reading 동일
 - reading: 히라가나. 정답 판정 기준
 - example_reading: 예문 전체의 히라가나 읽기
