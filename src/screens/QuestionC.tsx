@@ -4,6 +4,7 @@ import * as wanakana from 'wanakana'
 import type { InputMode, JudgeResult, Word } from '../types'
 import { judgeReading, normalizeReading } from '../logic/reading'
 import { blankExample, posLabel } from '../logic/example'
+import { finalizeRomaji, ROMAJI_BIND_OPTIONS } from '../logic/romaji'
 
 interface Props {
   word: Word
@@ -20,11 +21,11 @@ export function QuestionC({ word, inputMode, onInputModeChange, onSubmit }: Prop
   const inputRef = useRef<HTMLInputElement>(null)
   const [hintUsed, setHintUsed] = useState(false)
 
-  // 로마자 모드: wanakana 가 입력칸 안에서 로마자를 실시간으로 히라가나로 바꾼다
+  // 로마자 모드: wanakana 가 입력칸 안에서 로마자를 실시간으로 히라가나로 바꾼다 (규칙은 logic/romaji.ts)
   useEffect(() => {
     const el = inputRef.current
     if (!el || inputMode !== 'romaji') return
-    wanakana.bind(el, { IMEMode: 'toHiragana' })
+    wanakana.bind(el, ROMAJI_BIND_OPTIONS)
     return () => wanakana.unbind(el)
   }, [inputMode])
 
@@ -35,8 +36,8 @@ export function QuestionC({ word, inputMode, onInputModeChange, onSubmit }: Prop
   function submit(e: FormEvent) {
     e.preventDefault()
     const raw = inputRef.current?.value ?? ''
-    // 로마자 모드에서 끝에 남은 'n' 같은 미변환 글자를 마저 변환
-    const finalized = inputMode === 'romaji' ? wanakana.toHiragana(raw) : raw
+    // 로마자 모드에서 끝에 남은 n·nn 같은 미변환 글자를 마저 변환
+    const finalized = inputMode === 'romaji' ? finalizeRomaji(raw) : raw
     const answer = normalizeReading(finalized)
     onSubmit({ correct: judgeReading(answer, word.reading), answer, hintUsed })
   }
