@@ -1,7 +1,7 @@
 [
   {"id": "n4-0501", "word": "写す", "reading": "うつす", "meaning_ko": "베끼다, (사진을) 찍다", "example_ja": "黒板の字をノートに写します。", "example_reading": "こくばんのじをのーとにうつします。", "example_ko": "칠판의 글자를 노트에 베낍니다.", "pos": "verb", "tags": ["school"], "hanja_ko": null},
   {"id": "n4-0502", "word": "移る", "reading": "うつる", "meaning_ko": "옮기다, 이동하다", "example_ja": "東京に移りました。", "example_reading": "とうきょうにうつりました。", "example_ko": "도쿄로 옮겼습니다.", "pos": "verb", "tags": ["basic"], "hanja_ko": null},
-  {"id": "n4-0503", "word": "お子さん", "reading": "おこさん", "meaning_ko": "자녀분", "example_ja": "お子さんは何歳ですか。", "example_reading": "おこさんはなんさいですか。", "example_ko": "자녀분은 몇 살입니까.", "pos": "noun", "tags": ["people", "keigo"], "hanja_ko": null},
+  {"id": "n4-0503", "word": "画家", "reading": "がか", "meaning_ko": "화가", "example_ja": "兄は画家です。", "example_reading": "あにはがかです。", "example_ko": "형은 화가입니다.", "pos": "noun", "tags": ["work", "people"], "hanja_ko": "화가"},
   {"id": "n4-0504", "word": "厳しい", "reading": "きびしい", "meaning_ko": "엄하다, 혹독하다", "example_ja": "父は厳しい人です。", "example_reading": "ちちはきびしいひとです。", "example_ko": "아버지는 엄한 사람입니다.", "pos": "i-adj", "tags": ["people"], "hanja_ko": null},
   {"id": "n4-0505", "word": "研究室", "reading": "けんきゅうしつ", "meaning_ko": "연구실", "example_ja": "先生は研究室にいます。", "example_reading": "せんせいはけんきゅうしつにいます。", "example_ko": "선생님은 연구실에 있습니다.", "pos": "noun", "tags": ["school", "place"], "hanja_ko": "연구실"},
   {"id": "n4-0506", "word": "ご存知", "reading": "ごぞんじ", "meaning_ko": "아심 (존경어)", "example_ja": "この店をご存知ですか。", "example_reading": "このみせをごぞんじですか。", "example_ko": "이 가게를 아십니까.", "pos": "noun", "tags": ["keigo"], "hanja_ko": null},
@@ -52,7 +52,7 @@
   {"id": "n4-0551", "word": "成績", "reading": "せいせき", "meaning_ko": "성적", "example_ja": "成績が上がりました。", "example_reading": "せいせきがあがりました。", "example_ko": "성적이 올랐습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "성적"},
   {"id": "n4-0552", "word": "合格", "reading": "ごうかく", "meaning_ko": "합격", "example_ja": "試験に合格しました。", "example_reading": "しけんにごうかくしました。", "example_ko": "시험에 합격했습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "합격"},
   {"id": "n4-0553", "word": "卒業式", "reading": "そつぎょうしき", "meaning_ko": "졸업식", "example_ja": "三月に卒業式があります。", "example_reading": "さんがつにそつぎょうしきがあります。", "example_ko": "3월에 졸업식이 있습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "졸업식"},
-  {"id": "n4-0554", "word": "入学式", "reading": "にゅうがくしき", "meaning_ko": "입학식", "example_ja": "入学式に出ました。", "example_reading": "にゅうがくしきにでました。", "example_ko": "입학식에 참석했습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "입학식"},
+  {"id": "n4-0554", "word": "歩道", "reading": "ほどう", "meaning_ko": "보도, 인도", "example_ja": "歩道を歩きます。", "example_reading": "ほどうをあるきます。", "example_ko": "인도를 걷습니다.", "pos": "noun", "tags": ["transport"], "hanja_ko": "보도"},
   {"id": "n4-0555", "word": "遠足", "reading": "えんそく", "meaning_ko": "소풍", "example_ja": "遠足で山に行きました。", "example_reading": "えんそくでやまにいきました。", "example_ko": "소풍으로 산에 갔습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "원족"},
   {"id": "n4-0556", "word": "運動会", "reading": "うんどうかい", "meaning_ko": "운동회", "example_ja": "秋に運動会があります。", "example_reading": "あきにうんどうかいがあります。", "example_ko": "가을에 운동회가 있습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "운동회"},
   {"id": "n4-0557", "word": "体育", "reading": "たいいく", "meaning_ko": "체육", "example_ja": "体育の授業が好きです。", "example_reading": "たいいくのじゅぎょうがすきです。", "example_ko": "체육 수업을 좋아합니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "체육"},
