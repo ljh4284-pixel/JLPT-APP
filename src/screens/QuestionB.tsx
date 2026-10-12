@@ -4,6 +4,7 @@ import { makeDistractors } from '../logic/distractors'
 
 interface Props {
   word: Word
+  pool: Word[]                          // 같은 급수 단어장. N4 이상은 다른 단어의 읽기를 오답으로 쓴다
   onSubmit: (result: JudgeResult) => void
 }
 
@@ -35,13 +36,13 @@ function shuffle<T>(arr: T[]): T[] {
  * 문제(유형 B, 화면 이름 "읽기 고르기"): 한자 표기 제시 → 읽기 4지선다. 음성은 들려주지 않는다.
  * JLPT 문자·어휘 もんだい1(漢字読み) 형식. 가나만 쓰는 단어는 뜻을 제시한다.
  */
-export function QuestionB({ word, onSubmit }: Props) {
+export function QuestionB({ word, pool, onSubmit }: Props) {
   const kanaOnly = isKanaOnly(word)
 
   const options = useMemo<Option[]>(() => {
-    const wrong = makeDistractors(word).map((d) => ({ text: d.text, correct: false, wrongPoint: d.hint }))
+    const wrong = makeDistractors(word, 3, pool).map((d) => ({ text: d.text, correct: false, wrongPoint: d.hint }))
     return shuffle([{ text: word.reading, correct: true }, ...wrong])
-  }, [word])
+  }, [word, pool])
 
   function choose(o: Option) {
     onSubmit({ correct: o.correct, answer: o.text, hintUsed: false, wrongPoint: o.wrongPoint })

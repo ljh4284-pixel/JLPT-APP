@@ -47,7 +47,7 @@ import { Settings } from './screens/Settings'
 /** 화면 단계: (최초 실행) → 홈 → (신규면 단어 제시) → 문제 → 피드백 → 다음 카드 … → (재출제 대기) → 종료. 홈에서 진도·설정으로 */
 type Phase = 'loading' | 'onboarding' | 'home' | 'present' | 'question' | 'feedback' | 'wait' | 'done' | 'progress' | 'settings'
 
-const EMPTY_SESSION: Session = { queue: [], relearn: [], answered: 0, correct: 0 }
+const EMPTY_SESSION: Session = { pool: [], queue: [], relearn: [], answered: 0, correct: 0 }
 
 /** 쓸 수 있는 목소리. 이름은 gen_audio.py 의 VOICE_NAMES 와 같다 */
 const VOICES = [
@@ -301,7 +301,7 @@ function App() {
         <QuestionA word={current.word} onReveal={() => setPhase('feedback')} />
       )}
       {phase === 'question' && current && current.questionType === 'B' && (
-        <QuestionB key={`${current.word.id}-${session.answered}`} word={current.word} onSubmit={submitJudged} />
+        <QuestionB key={`${current.word.id}-${session.answered}`} word={current.word} pool={words} onSubmit={submitJudged} />
       )}
       {phase === 'question' && current && current.questionType === 'C' && (
         <QuestionC

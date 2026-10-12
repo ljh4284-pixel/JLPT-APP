@@ -2,19 +2,22 @@
  * 읽기 고르기(유형 B) 오답 생성 (PROJECT.md 3장 B)
  * 정답 읽기(히라가나)에 규칙을 적용해 오답을 만든다. 무작위 다른 단어는 쓰지 않는다.
  *
- * 규칙: 장음 추가/제거, 탁점·반탁점 추가/제거, 촉음 추가/제거, 요음 변형, (마지막) 글자 순서 바꾸기
+ * 소리 변형 규칙: 장음 추가/제거, 탁점·반탁점 추가/제거, 촉음 추가/제거, 요음 변형, (마지막) 글자 순서 바꾸기
  * 우선순위: 단어의 confusion 태그에 있는 규칙 → 나머지 규칙 → 순서 바꾸기
+ * N4 이상: JLPT 漢字読み 오답이 "비슷한 분야의 다른 단어 읽기"이므로(docs/jlpt_exam_format.md 7-2)
+ *   같은 품사이고 한자나 분야 태그를 공유하는 다른 단어의 읽기를 먼저 2개 쓰고, 나머지는 소리 변형으로 채운다
  * 유효성: 가나 조합으로 가능한 형태, 정답과 다름, 서로 다름
  * 외부 라이브러리 없이 순수 함수로만 구성한다.
  */
 import type { Word } from '../types'
 
-export type Rule = 'long' | 'dakuten' | 'handakuten' | 'sokuon' | 'yoon' | 'order'
+export type SoundRule = 'long' | 'dakuten' | 'handakuten' | 'sokuon' | 'yoon' | 'order'
+export type Rule = SoundRule | 'other'   // other = 다른 단어의 읽기 (N4 이상)
 
 export interface Distractor {
   text: string
   rule: Rule
-  hint: string     // 틀린 지점 안내. 예: "탁음 아님 → か"
+  hint: string     // 틀린 지점 안내. 예: "탁음 아님 → か", "다른 단어 → 向かう"
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +209,7 @@ function genOrder(m: string[]): Candidate[] {
   return out
 }
 
-const GENERATORS: Record<Rule, (m: string[]) => Candidate[]> = {
+const GENERATORS: Record<SoundRule, (m: string[]) => Candidate[]> = {
   long: genLong,
   dakuten: genDakuten,
   handakuten: genHandakuten,
@@ -215,36 +218,102 @@ const GENERATORS: Record<Rule, (m: string[]) => Candidate[]> = {
   order: genOrder,
 }
 /** 태그가 없을 때의 기본 순서. JLPT N5 공식 예(てんき/でんき)처럼 탁음 변형이 가장 그럴듯해서 먼저 쓴다 */
-const DEFAULT_ORDER: Rule[] = ['dakuten', 'handakuten', 'sokuon', 'yoon', 'long']
+const DEFAULT_ORDER: SoundRule[] = ['dakuten', 'handakuten', 'sokuon', 'yoon', 'long']
 
 /** 규칙 적용 순서: confusion 태그 → 나머지 → 순서 바꾸기 */
-export function ruleOrder(confusion: string[]): Rule[] {
-  const tagged = confusion.filter((c): c is Rule => (DEFAULT_ORDER as string[]).includes(c))
+export function ruleOrder(confusion: string[]): SoundRule[] {
+  const tagged = confusion.filter((c): c is SoundRule => (DEFAULT_ORDER as string[]).includes(c))
   const rest = DEFAULT_ORDER.filter((r) => !tagged.includes(r))
   return [...tagged, ...rest, 'order']
+}
+
+// ---------------------------------------------------------------------------
+// N4 이상: 다른 단어 읽기 오답 (PROJECT.md 3장 B, docs/jlpt_exam_format.md 7-2)
+// JLPT N4 이상의 漢字読み 오답은 "비슷한 분야의 다른 단어 읽기"다 (通って → むかって/わたって).
+// 무작위 단어는 쓰지 않는다: 같은 품사이고, 한자를 공유하거나 분야 태그를 공유하는 단어만 후보가 된다.
+// ---------------------------------------------------------------------------
+
+/** 급수별로 다른 단어 읽기 오답을 몇 개 쓰는지. 나머지는 소리 변형 오답으로 채운다 */
+export function otherWordCount(level: string): number {
+  return level === 'N5' ? 0 : 2
+}
+
+const NON_MEANING_TAGS = new Set(['katakana'])   // 표기 종류 태그. 분야 공유로 치지 않는다
+
+function isKanji(ch: string): boolean {
+  const c = ch.codePointAt(0) ?? 0
+  return c >= 0x4e00 && c <= 0x9fff
+}
+
+function kanjiSet(s: string): Set<string> {
+  return new Set(Array.from(s).filter(isKanji))
+}
+
+/**
+ * 다른 단어 읽기 후보를 그럴듯한 순서로 돌려준다 (점수 높은 순, 같으면 id 순 → 항상 같은 결과).
+ *  - 조건: 같은 품사, 읽기가 다름, 모라 수 차이 1 이하, 한자 공유 또는 분야 태그 공유
+ *  - 점수: 한자 공유 +3, 공유 태그마다 +1, 모라 수 같음 +2, 끝 모라 같음 +1
+ */
+export function otherWordCandidates(word: Word, pool: Word[]): Word[] {
+  const morae = toMorae(word.reading)
+  const kanji = kanjiSet(word.word)
+  const tags = word.tags.filter((t) => !NON_MEANING_TAGS.has(t))
+  const scored: { word: Word; score: number }[] = []
+  for (const other of pool) {
+    if (other.id === word.id || other.pos !== word.pos || other.reading === word.reading) continue
+    const m = toMorae(other.reading)
+    const lengthDiff = Math.abs(m.length - morae.length)
+    if (lengthDiff > 1) continue
+    const sharedKanji = Array.from(kanjiSet(other.word)).some((k) => kanji.has(k))
+    const sharedTags = tags.filter((t) => other.tags.includes(t)).length
+    if (!sharedKanji && sharedTags === 0) continue
+    let score = sharedTags + (sharedKanji ? 3 : 0) + (lengthDiff === 0 ? 2 : 0)
+    if (m[m.length - 1] === morae[morae.length - 1]) score += 1
+    scored.push({ word: other, score })
+  }
+  scored.sort((a, b) => b.score - a.score || (a.word.id < b.word.id ? -1 : 1))
+  return scored.map((c) => c.word)
 }
 
 /**
  * 오답을 우선순위대로 최대 `count` 개 만든다. 유효한 오답이 부족하면 더 적게 돌려준다.
  * 같은 단어에는 항상 같은 결과가 나온다 (무작위 없음).
+ *  1) N4 이상이고 단어장(pool)이 있으면 다른 단어 읽기를 otherWordCount 개 먼저
+ *  2) 소리 변형 규칙 (confusion 태그 → 나머지 → 순서 바꾸기)
+ *  3) 그래도 부족하면 남은 다른 단어 읽기로 보충
  */
-export function makeDistractors(word: Word, count = 3): Distractor[] {
+export function makeDistractors(word: Word, count = 3, pool: Word[] = []): Distractor[] {
   const answer = word.reading
   const morae = toMorae(answer)
   const seen = new Set<string>([answer])
   const out: Distractor[] = []
+  const push = (text: string, rule: Rule, hint: string): boolean => {
+    if (out.length >= count || seen.has(text) || !isValidReading(text)) return false
+    seen.add(text)
+    out.push({ text, rule, hint })
+    return true
+  }
+  // N5 는 소리 변형만 쓴다 (otherWordCount 0). 그 외 급수는 단어장이 있을 때 다른 단어 읽기를 후보로 둔다
+  const others = pool.length > 0 && otherWordCount(word.level) > 0 ? otherWordCandidates(word, pool) : []
+  let used = 0
+  for (const o of others) {
+    if (used >= otherWordCount(word.level)) break
+    if (push(o.reading, 'other', `다른 단어 → ${o.word}`)) used++
+  }
   for (const rule of ruleOrder(word.confusion)) {
     for (const c of GENERATORS[rule](morae)) {
       if (out.length >= count) return out
-      if (seen.has(c.text) || !isValidReading(c.text)) continue
-      seen.add(c.text)
-      out.push({ text: c.text, rule, hint: c.hint })
+      push(c.text, rule, c.hint)
     }
+  }
+  for (const o of others) {
+    if (out.length >= count) break
+    push(o.reading, 'other', `다른 단어 → ${o.word}`)
   }
   return out
 }
 
-/** 이 단어로 읽기 고르기 문제를 낼 수 있는지 (유효한 오답 3개 이상) */
-export function canMakeQuestion(word: Word): boolean {
-  return makeDistractors(word).length >= 3
+/** 이 단어로 읽기 고르기 문제를 낼 수 있는지 (유효한 오답 3개 이상). N4 이상은 단어장을 함께 준다 */
+export function canMakeQuestion(word: Word, pool: Word[] = []): boolean {
+  return makeDistractors(word, 3, pool).length >= 3
 }

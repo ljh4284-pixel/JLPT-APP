@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Word, WordProgress } from '../types'
 import wordsJson from '../data/words_n5.json'
+import n4Json from '../data/words_n4.json'
 import { applyRating, newCard } from './scheduler'
 import {
   afterRating,
@@ -18,6 +19,7 @@ import {
 } from './session'
 
 const wordsN5 = wordsJson as Word[]
+const wordsN4 = n4Json as Word[]
 const now = new Date('2026-10-12T09:00:00')
 const OPTS = { newPerDay: 5, weights: { A: 2, B: 1, C: 1 } }
 const word = (i: number) => wordsN5[i]
@@ -80,6 +82,14 @@ describe('세션 구성', () => {
     expect(canAskB(word(0), progressAfter(0, 'good', now))).toBe(true)
     const denwa = wordsN5.findIndex((w) => w.word === '電話')
     expect(canAskB(word(denwa), progressAfter(denwa, 'good', now))).toBe(false)   // 유효 오답 부족
+  })
+
+  it('N4 이상은 세션 단어장을 함께 받아 다른 단어 읽기를 오답으로 쓴다', () => {
+    const chi = wordsN4.find((w) => w.word === '血')!
+    const p: WordProgress = { ...progressAfter(0, 'good', now), word_id: chi.id, level: 'N4' }
+    expect(canAskB(chi, p)).toBe(false)              // 소리 변형만으로는 오답 3개가 안 됨
+    expect(canAskB(chi, p, wordsN4)).toBe(true)
+    expect(buildSession(wordsN4, [], now, OPTS).pool).toBe(wordsN4)
   })
 
   it('평가 후 짧은 간격 상태면 재출제 대기에 들어가고, 대기열이 비면 대기 화면 → 기한 뒤 카드', () => {

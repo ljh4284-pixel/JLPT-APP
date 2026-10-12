@@ -13,6 +13,7 @@ import { NEW_PER_SESSION } from '../config'
 import { typeCycle, type TypeWeights } from './settings'
 
 export interface Session {
+  pool: Word[]                                      // 이 세션의 단어장 (읽기 고르기의 다른 단어 읽기 오답 후보)
   queue: SessionCard[]                              // 아직 안 낸 카드
   relearn: { card: SessionCard; due: Date }[]       // 세션 내 재출제 대기 (due 오름차순)
   answered: number
@@ -91,10 +92,10 @@ export function answeredCorrectlyBefore(p: WordProgress | undefined): boolean {
 /**
  * 읽기 고르기(B)를 낼 수 있는 단어인지 (PROJECT.md 3장 B 적용 조건)
  *  - A 또는 C 에서 최소 1회 맞힌 후부터. 신규 첫 노출에는 쓰지 않음
- *  - 유효한 오답 3개 이상
+ *  - 유효한 오답 3개 이상 (N4 이상은 같은 급수 단어장 pool 에서 다른 단어 읽기도 오답으로 쓴다)
  */
-export function canAskB(word: Word, p: WordProgress | undefined): boolean {
-  return answeredCorrectlyBefore(p) && canMakeQuestion(word)
+export function canAskB(word: Word, p: WordProgress | undefined, pool: Word[] = []): boolean {
+  return answeredCorrectlyBefore(p) && canMakeQuestion(word, pool)
 }
 
 export interface SessionOptions {
@@ -127,9 +128,9 @@ export function buildSession(words: Word[], progress: WordProgress[], now: Date,
   let newPos = 0
   const queue: SessionCard[] = mixed.map((c) => ({
     ...c,
-    questionType: typeFor(cycle, c.isNew ? newPos++ : reviewPos++, c.isNew, canAskB(c.word, byId.get(c.word.id))),
+    questionType: typeFor(cycle, c.isNew ? newPos++ : reviewPos++, c.isNew, canAskB(c.word, byId.get(c.word.id), words)),
   }))
-  return { queue, relearn: [], answered: 0, correct: 0 }
+  return { pool: words, queue, relearn: [], answered: 0, correct: 0 }
 }
 
 /** 다음에 할 일. force=true 면 재출제 카드를 기한 전이라도 꺼낸다 */
@@ -161,7 +162,7 @@ export function afterRating(s: Session, card: SessionCard, rating: Rating, progr
     correct: s.correct + (rating === 'again' ? 0 : 1),
   }
   if (isShortTerm(progress.fsrs_card)) {
-    const questionType: QuestionType = canAskB(card.word, progress) ? 'B' : weights && weights.C === 0 ? 'A' : 'C'
+    const questionType: QuestionType = canAskB(card.word, progress, s.pool) ? 'B' : weights && weights.C === 0 ? 'A' : 'C'
     const item = { card: { ...card, isNew: false, questionType }, due: progress.fsrs_card.due }
     next.relearn = [...s.relearn, item].sort((x, y) => x.due.getTime() - y.due.getTime())
   }
