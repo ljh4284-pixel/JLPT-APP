@@ -1,0 +1,6 @@
+[
+  {"id": "n5-0701", "word": "お酒", "reading": "おさけ", "meaning_ko": "술", "example_ja": "お酒を飲みますか。", "example_reading": "おさけをのみますか。", "example_ko": "술을 마십니까.", "pos": "noun", "tags": ["food"], "hanja_ko": null},
+  {"id": "n5-0702", "word": "ごめんなさい", "reading": "ごめんなさい", "meaning_ko": "미안합니다", "example_ja": "遅れてごめんなさい。", "example_reading": "おくれてごめんなさい。", "example_ko": "늦어서 미안합니다.", "pos": "phrase", "tags": ["greeting"], "hanja_ko": null},
+  {"id": "n5-0703", "word": "おじさん", "reading": "おじさん", "meaning_ko": "아저씨, 삼촌", "example_ja": "おじさんは医者です。", "example_reading": "おじさんはいしゃです。", "example_ko": "삼촌은 의사입니다.", "pos": "noun", "tags": ["family", "people"], "hanja_ko": null},
+  {"id": "n5-0704", "word": "おばさん", "reading": "おばさん", "meaning_ko": "아주머니, 이모·고모", "example_ja": "おばさんに会いました。", "example_reading": "おばさんにあいました。", "example_ko": "이모를 만났습니다.", "pos": "noun", "tags": ["family", "people"], "hanja_ko": null}
+]

@@ -15,6 +15,8 @@ export interface Word {
   confusion: string[]
   hanja_ko: string | null
   audio: string | null    // 음성 파일명(확장자 제외). 없으면 null
+  tier?: 'core' | 'ext'   // 핵심/확장 (2026-10-13. 없으면 core 로 본다)
+  alt_readings?: string[] // 같은 표기의 다른 유효 읽기(JMdict). 읽기 고르기 오답에서 제외 (2026-10-13)
 }
 
 /** 자기평가 4단계 */

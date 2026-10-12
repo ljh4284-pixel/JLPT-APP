@@ -1,0 +1,10 @@
+[
+  {"id": "n4-0701", "word": "もうすぐ", "reading": "もうすぐ", "meaning_ko": "이제 곧", "example_ja": "もうすぐ春です。", "example_reading": "もうすぐはるです。", "example_ko": "이제 곧 봄입니다.", "pos": "adverb", "tags": ["time"], "hanja_ko": null},
+  {"id": "n4-0702", "word": "お見舞い", "reading": "おみまい", "meaning_ko": "병문안", "example_ja": "友達のお見舞いに行きました。", "example_reading": "ともだちのおみまいにいきました。", "example_ko": "친구 병문안을 갔습니다.", "pos": "noun", "tags": ["health"], "hanja_ko": null},
+  {"id": "n4-0703", "word": "応接間", "reading": "おうせつま", "meaning_ko": "응접실", "example_ja": "客を応接間に案内します。", "example_reading": "きゃくをおうせつまにあんないします。", "example_ko": "손님을 응접실로 안내합니다.", "pos": "noun", "tags": ["home"], "hanja_ko": "응접간"},
+  {"id": "n4-0704", "word": "お陰", "reading": "おかげ", "meaning_ko": "덕분", "example_ja": "お陰で助かりました。", "example_reading": "おかげでたすかりました。", "example_ko": "덕분에 살았습니다.", "pos": "noun", "tags": ["basic"], "hanja_ko": null},
+  {"id": "n4-0705", "word": "お子さん", "reading": "おこさん", "meaning_ko": "자녀분", "example_ja": "お子さんは何歳ですか。", "example_reading": "おこさんはなんさいですか。", "example_ko": "자녀분은 몇 살입니까.", "pos": "noun", "tags": ["people", "keigo"], "hanja_ko": null},
+  {"id": "n4-0706", "word": "入学式", "reading": "にゅうがくしき", "meaning_ko": "입학식", "example_ja": "入学式に出ました。", "example_reading": "にゅうがくしきにでました。", "example_ko": "입학식에 참석했습니다.", "pos": "noun", "tags": ["school"], "hanja_ko": "입학식"},
+  {"id": "n4-0707", "word": "お寺", "reading": "おてら", "meaning_ko": "절, 사원", "example_ja": "京都のお寺を見ました。", "example_reading": "きょうとのおてらをみました。", "example_ko": "교토의 절을 봤습니다.", "pos": "noun", "tags": ["place"], "hanja_ko": null},
+  {"id": "n4-0708", "word": "お客さん", "reading": "おきゃくさん", "meaning_ko": "손님", "example_ja": "お客さんが来ました。", "example_reading": "おきゃくさんがきました。", "example_ko": "손님이 왔습니다.", "pos": "noun", "tags": ["people"], "hanja_ko": null}
+]
