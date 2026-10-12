@@ -230,3 +230,15 @@ body { background: var(--bg); }
 .suspended-list { list-style: none; padding: 0; margin: 0; }
 .suspended-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e4e4ea; }
 .btn.rate:disabled { opacity: 0.6; }
+
+/* 로마자 입력 도움말 시트 (2026-10-13) */
+.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+.sheet { background: #fff; width: 100%; max-width: 430px; max-height: 85vh; overflow-y: auto; border-radius: 16px 16px 0 0; padding: 16px 16px 24px; box-sizing: border-box; }
+.sheet h2 { margin: 0 0 8px; font-size: 18px; }
+.sheet .btn { margin-top: 16px; width: 100%; }
+.help-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+.help-table th, .help-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #e4e4ea; vertical-align: top; }
+.help-table th { font-weight: 600; color: var(--muted); font-size: 12px; }
+.help-table td:first-child { min-width: 84px; }
+.help-table td:nth-child(2) { min-width: 96px; }
+.help-ex { display: block; white-space: nowrap; }

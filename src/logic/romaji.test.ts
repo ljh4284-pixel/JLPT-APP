@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { finalizeRomaji, romajiToHiragana } from './romaji'
+import { finalizeRomaji, ROMAJI_HELP_ROWS, romajiToHiragana } from './romaji'
 
 /** 일본어 IME(Microsoft IME) 와 같은 규칙임을 고정하는 테스트. 바꾸려면 PROJECT.md 3장 C 의 결정을 먼저 바꾼다 */
 describe('로마자 입력 규칙 (일본어 IME 방식)', () => {
@@ -39,5 +39,11 @@ describe('로마자 입력 규칙 (일본어 IME 방식)', () => {
   it('더하지 않은 예외: tch 는 변환되지 않고 cc 로 친다', () => {
     expect(romajiToHiragana('maccha')).toBe('まっちゃ')
     expect(romajiToHiragana('matcha')).not.toBe('まっちゃ')
+  })
+
+  it('도움말 표의 예시는 모두 실제 변환 결과와 같다', () => {
+    for (const row of ROMAJI_HELP_ROWS) {
+      for (const [romaji, kana] of row.examples) expect(romajiToHiragana(romaji), `${row.sound}: ${romaji}`).toBe(kana)
+    }
   })
 })

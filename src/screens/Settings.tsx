@@ -10,6 +10,7 @@ import {
   weightsFor,
   type Settings as SettingsValue,
 } from '../learning/settings'
+import { RomajiHelp } from './RomajiHelp'
 
 interface Props {
   level: string
@@ -38,6 +39,7 @@ function formatBackupTime(iso: string | null): string {
 /** 설정: 신규 단어 수/일, 세션 시간 제한, 문제 유형 비중, 입력 방식, 목소리, 제외한 단어, 데이터 */
 export function Settings({ level, settings, voices, suspended, message, onChange, onRestore, onExport, onImport, onReset, onClose }: Props) {
   const [confirmReset, setConfirmReset] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const weights = weightsFor(settings, level)
   const cycle = typeCycle(weights)
 
@@ -138,6 +140,9 @@ export function Settings({ level, settings, voices, suspended, message, onChange
               </button>
             ))}
           </div>
+          <p className="muted small">
+            <button type="button" className="link" onClick={() => setShowHelp(true)}>로마자 입력 방법 보기</button>
+          </p>
         </section>
 
         <section>
@@ -199,6 +204,7 @@ export function Settings({ level, settings, voices, suspended, message, onChange
       <footer className="actions">
         <button className="btn primary" onClick={onClose}>닫기</button>
       </footer>
+      {showHelp && <RomajiHelp onClose={() => setShowHelp(false)} />}
     </>
   )
 }

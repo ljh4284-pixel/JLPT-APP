@@ -5,6 +5,7 @@ import type { InputMode, JudgeResult, Word } from '../types'
 import { judgeReading, normalizeReading } from '../logic/reading'
 import { blankExample, posLabel } from '../logic/example'
 import { finalizeRomaji, ROMAJI_BIND_OPTIONS } from '../logic/romaji'
+import { RomajiHelp } from './RomajiHelp'
 
 interface Props {
   word: Word
@@ -20,6 +21,7 @@ interface Props {
 export function QuestionC({ word, inputMode, onInputModeChange, onSubmit }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [hintUsed, setHintUsed] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)   // 로마자 입력 도움말 (열어도 입력은 그대로)
 
   // 로마자 모드: wanakana 가 입력칸 안에서 로마자를 실시간으로 히라가나로 바꾼다 (규칙은 logic/romaji.ts)
   useEffect(() => {
@@ -75,6 +77,7 @@ export function QuestionC({ word, inputMode, onInputModeChange, onSubmit }: Prop
             일본어 자판
           </button>
         </div>
+        <button type="button" className="link quiet" onClick={() => setShowHelp(true)}>로마자 입력 방법 ?</button>
 
         <input
           key={inputMode}
@@ -106,6 +109,7 @@ export function QuestionC({ word, inputMode, onInputModeChange, onSubmit }: Prop
       <footer className="actions">
         <button type="submit" className="btn primary">확인</button>
       </footer>
+      {showHelp && <RomajiHelp onClose={() => setShowHelp(false)} />}
     </form>
   )
 }
