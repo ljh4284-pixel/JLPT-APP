@@ -11,6 +11,7 @@ export type Level = (typeof LEVELS)[number]
 const loaders: Partial<Record<Level, () => Promise<Word[]>>> = {
   N5: () => import('./words_n5.json').then((m) => m.default as Word[]),
   N4: () => import('./words_n4.json').then((m) => m.default as Word[]),
+  N3: () => import('./words_n3.json').then((m) => m.default as Word[]),
 }
 
 /** 단어장이 준비된 급수인지 */
