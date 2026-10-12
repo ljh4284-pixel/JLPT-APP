@@ -230,15 +230,20 @@ export function ruleOrder(confusion: string[]): SoundRule[] {
 // ---------------------------------------------------------------------------
 // N4 이상: 다른 단어 읽기 오답 (PROJECT.md 3장 B, docs/jlpt_exam_format.md 7-2)
 // JLPT N4 이상의 漢字読み 오답은 "비슷한 분야의 다른 단어 읽기"다 (通って → むかって/わたって).
-// 무작위 단어는 쓰지 않는다: 같은 품사이고, 한자를 공유하거나 분야 태그를 공유하는 단어만 후보가 된다.
+// 무작위 단어는 쓰지 않고, 혼동 이유가 설명되는 후보만 쓴다 (검토 반영 2026-10-13):
+//   kanji   : 한자를 공유 (入院 ↔ 退院)
+//   reading : 읽기가 비슷 — 첫 모라가 같고(탁음 차이는 무시) 모라 수도 같음 (貿易 ぼうえき ↔ 翻訳 ほんやく)
+//   field   : 같은 분야(넓은 태그 제외)이고 모라 수와 끝 모라가 같음 (通る とおる ↔ 渡る わたる)
+// 같은 표기의 다른 유효 읽기(alt_readings)는 오답으로 쓰지 않는다. 후보가 모자라면 억지로 채우지 않고 소리 변형으로 넘어간다.
 // ---------------------------------------------------------------------------
 
-/** 급수별로 다른 단어 읽기 오답을 몇 개 쓰는지. 나머지는 소리 변형 오답으로 채운다 */
+/** 급수별로 다른 단어 읽기 오답을 몇 개까지 쓰는지. 나머지는 소리 변형 오답으로 채운다 */
 export function otherWordCount(level: string): number {
   return level === 'N5' ? 0 : 2
 }
 
-const NON_MEANING_TAGS = new Set(['katakana'])   // 표기 종류 태그. 분야 공유로 치지 않는다
+/** 분야를 좁히지 못하는 넓은 태그(표기 종류 태그 포함). 후보 자격과 점수에서 뺀다 */
+export const BROAD_TAGS = new Set(['katakana', 'basic', 'daily', 'abstract', 'degree'])
 
 function isKanji(ch: string): boolean {
   const c = ch.codePointAt(0) ?? 0
@@ -249,43 +254,66 @@ function kanjiSet(s: string): Set<string> {
   return new Set(Array.from(s).filter(isKanji))
 }
 
+/** 탁음·반탁음을 청음으로 되돌린 모라 (ぼ→ほ, ぱ→は). 읽기 유사성 비교용 */
+function plainMora(mora: string): string {
+  const head = mora[0]
+  return (UNDAKUTEN[head] ?? UNHANDAKUTEN[head] ?? head) + mora.slice(1)
+}
+
+export type OtherReason = 'kanji' | 'reading' | 'field'
+
+export interface OtherCandidate {
+  word: Word
+  reason: OtherReason
+  score: number
+}
+
 /**
  * 다른 단어 읽기 후보를 그럴듯한 순서로 돌려준다 (점수 높은 순, 같으면 id 순 → 항상 같은 결과).
- *  - 조건: 같은 품사, 읽기가 다름, 모라 수 차이 1 이하, 한자 공유 또는 분야 태그 공유
- *  - 점수: 한자 공유 +3, 공유 태그마다 +1, 모라 수 같음 +2, 끝 모라 같음 +1
+ *  - 공통 조건: 같은 품사, 읽기가 다름, 같은 표기의 다른 읽기(alt_readings)가 아님, 모라 수 차이 1 이하
+ *  - 자격: kanji / reading / field 중 하나 (위 설명)
+ *  - 점수: 자격(kanji 30, reading 20, field 10) + 공유 태그 1씩 + 모라 수 같음 2 + 첫 모라 같음 2 + 끝 모라 같음 1
  */
-export function otherWordCandidates(word: Word, pool: Word[]): Word[] {
+export function otherWordCandidates(word: Word, pool: Word[]): OtherCandidate[] {
   const morae = toMorae(word.reading)
   const kanji = kanjiSet(word.word)
-  const tags = word.tags.filter((t) => !NON_MEANING_TAGS.has(t))
-  const scored: { word: Word; score: number }[] = []
+  const tags = word.tags.filter((t) => !BROAD_TAGS.has(t))
+  const alt = new Set(word.alt_readings ?? [])
+  const out: OtherCandidate[] = []
   for (const other of pool) {
-    if (other.id === word.id || other.pos !== word.pos || other.reading === word.reading) continue
+    if (other.id === word.id || other.pos !== word.pos || other.reading === word.reading || alt.has(other.reading)) continue
     const m = toMorae(other.reading)
-    const lengthDiff = Math.abs(m.length - morae.length)
-    if (lengthDiff > 1) continue
+    if (Math.abs(m.length - morae.length) > 1) continue
+    const sameLen = m.length === morae.length
     const sharedKanji = Array.from(kanjiSet(other.word)).some((k) => kanji.has(k))
     const sharedTags = tags.filter((t) => other.tags.includes(t)).length
-    if (!sharedKanji && sharedTags === 0) continue
-    let score = sharedTags + (sharedKanji ? 3 : 0) + (lengthDiff === 0 ? 2 : 0)
-    if (m[m.length - 1] === morae[morae.length - 1]) score += 1
-    scored.push({ word: other, score })
+    const sameFirst = plainMora(m[0]) === plainMora(morae[0])
+    const sameLast = m[m.length - 1] === morae[morae.length - 1]
+    let reason: OtherReason | null = null
+    if (sharedKanji) reason = 'kanji'
+    else if (sameFirst && sameLen) reason = 'reading'
+    else if (sharedTags > 0 && sameLen && sameLast) reason = 'field'
+    if (!reason) continue
+    const base = reason === 'kanji' ? 30 : reason === 'reading' ? 20 : 10
+    const score = base + sharedTags + (sameLen ? 2 : 0) + (sameFirst ? 2 : 0) + (sameLast ? 1 : 0)
+    out.push({ word: other, reason, score })
   }
-  scored.sort((a, b) => b.score - a.score || (a.word.id < b.word.id ? -1 : 1))
-  return scored.map((c) => c.word)
+  out.sort((a, b) => b.score - a.score || (a.word.id < b.word.id ? -1 : 1))
+  return out
 }
 
 /**
  * 오답을 우선순위대로 최대 `count` 개 만든다. 유효한 오답이 부족하면 더 적게 돌려준다.
  * 같은 단어에는 항상 같은 결과가 나온다 (무작위 없음).
- *  1) N4 이상이고 단어장(pool)이 있으면 다른 단어 읽기를 otherWordCount 개 먼저
+ *  1) N4 이상이고 단어장(pool)이 있으면 다른 단어 읽기를 otherWordCount 개까지 먼저 (자격 있는 후보만)
  *  2) 소리 변형 규칙 (confusion 태그 → 나머지 → 순서 바꾸기)
  *  3) 그래도 부족하면 남은 다른 단어 읽기로 보충
+ *  정답과 같은 표기의 다른 유효 읽기(alt_readings)는 어느 단계에서도 오답으로 쓰지 않는다
  */
 export function makeDistractors(word: Word, count = 3, pool: Word[] = []): Distractor[] {
   const answer = word.reading
   const morae = toMorae(answer)
-  const seen = new Set<string>([answer])
+  const seen = new Set<string>([answer, ...(word.alt_readings ?? [])])
   const out: Distractor[] = []
   const push = (text: string, rule: Rule, hint: string): boolean => {
     if (out.length >= count || seen.has(text) || !isValidReading(text)) return false
@@ -298,7 +326,7 @@ export function makeDistractors(word: Word, count = 3, pool: Word[] = []): Distr
   let used = 0
   for (const o of others) {
     if (used >= otherWordCount(word.level)) break
-    if (push(o.reading, 'other', `다른 단어 → ${o.word}`)) used++
+    if (push(o.word.reading, 'other', `다른 단어 → ${o.word.word}`)) used++
   }
   for (const rule of ruleOrder(word.confusion)) {
     for (const c of GENERATORS[rule](morae)) {
@@ -308,7 +336,7 @@ export function makeDistractors(word: Word, count = 3, pool: Word[] = []): Distr
   }
   for (const o of others) {
     if (out.length >= count) break
-    push(o.reading, 'other', `다른 단어 → ${o.word}`)
+    push(o.word.reading, 'other', `다른 단어 → ${o.word.word}`)
   }
   return out
 }

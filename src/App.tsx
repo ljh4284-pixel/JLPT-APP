@@ -153,7 +153,7 @@ function App() {
     advance(buildSession(words, allProgress(), new Date(), { newPerDay: settings.newPerDay, weights }))
   }
 
-  /** 읽기 고르기(B)·발음 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
+  /** 읽기 고르기(B)·읽기 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
   function submitJudged(r: JudgeResult) {
     setResult(r)
     setPhase('feedback')

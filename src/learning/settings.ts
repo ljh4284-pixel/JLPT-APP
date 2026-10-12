@@ -23,13 +23,16 @@ export const MAX_WEIGHT = 3
 export const MIN_NEW_PER_DAY = 1
 export const MAX_NEW_PER_DAY = 20
 
-/** 급수별 기본 비중. N5 는 뜻 회상 중심에 읽기 고르기·발음 입력을 섞는다 (PROJECT.md 3장, 사용자 결정 2026-10-11) */
+/**
+ * 급수별 기본 비중 (PROJECT.md 3장). N5 는 뜻 회상 중심에 읽기 고르기·읽기 입력을 섞는다 (사용자 결정 2026-10-11).
+ * N4 이상은 잠정 A3·B1·C1 (검토 반영 2026-10-13. 읽기 입력 비중은 실사용 뒤 재검토)
+ */
 export const DEFAULT_WEIGHTS: Record<string, TypeWeights> = {
   N5: { A: 2, B: 1, C: 1 },
-  N4: { A: 2, B: 1, C: 2 },
-  N3: { A: 2, B: 1, C: 2 },
-  N2: { A: 1, B: 1, C: 2 },
-  N1: { A: 1, B: 1, C: 2 },
+  N4: { A: 3, B: 1, C: 1 },
+  N3: { A: 3, B: 1, C: 1 },
+  N2: { A: 3, B: 1, C: 1 },
+  N1: { A: 3, B: 1, C: 1 },
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -92,4 +95,4 @@ export function typeCycle(weights: TypeWeights): QuestionType[] {
 }
 
 /** 화면 표시용 유형 이름 */
-export const TYPE_LABEL: Record<QuestionType, string> = { A: '뜻 회상', B: '읽기 고르기', C: '발음 입력' }
+export const TYPE_LABEL: Record<QuestionType, string> = { A: '뜻 회상', B: '읽기 고르기', C: '읽기 입력' }

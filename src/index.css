@@ -217,3 +217,8 @@ body { background: var(--bg); }
 .voice-pick { flex: 1; text-align: left; background: none; border: none; font-size: 17px; font-weight: 600; color: var(--text); cursor: pointer; min-height: 44px; }
 .voice-card .btn.play { margin-top: 0; }
 .seg button:disabled { opacity: 0.4; cursor: default; }
+
+/* 읽기 입력: 품사 표시와 예문 빈칸 (2026-10-13) */
+.meaning .pos { font-size: 0.8rem; font-weight: normal; opacity: 0.6; margin-left: 0.4rem; }
+.example.blank { margin-top: 0.75rem; }
+.example.blank p[lang="ja"] { font-size: 1.15rem; line-height: 1.6; }

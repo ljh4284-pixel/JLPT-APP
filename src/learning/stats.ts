@@ -4,14 +4,14 @@
 import { State } from 'ts-fsrs'
 import type { Word, WordProgress } from '../types'
 
-/** 안정성(stability, 기억이 90% 남는 데 걸리는 날 수)이 이 값 이상이면 "정착"으로 본다 */
+/** 안정성(stability, 기억이 90% 남는 데 걸리는 날 수)이 이 값 이상이면 "복습 간격이 길어진 단어"로 센다. 암기 인증이 아니다 (문구 수정 2026-10-13) */
 export const STABLE_DAYS = 21
 
 export interface LevelStats {
   level: string
   total: number        // 단어장 단어 수
   learned: number      // 기록이 있는 단어 수
-  stable: number       // 정착 단어 수
+  stable: number       // 복습 간격이 STABLE_DAYS 이상인 단어 수
 }
 
 export interface AccuracyStats {

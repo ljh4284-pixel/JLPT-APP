@@ -54,7 +54,14 @@ describe('세션 구성', () => {
     expect(s.queue).toHaveLength(5)
     expect(s.queue.every((c) => c.isNew)).toBe(true)
     expect(s.queue.map((c) => c.questionType)).toEqual(['A', 'C', 'A', 'A', 'C'])   // 신규는 순환 [A,B,C,A] 에서 B 를 뺀 [A,C,A]
-    expect(newWords(wordsN5, [], 3).map((w) => w.id)).toEqual(['n5-0001', 'n5-0002', 'n5-0003'])
+    const first = newWords(wordsN5, [], 5)
+    expect(first).toHaveLength(5)
+    expect(new Set(first.map((w) => w.tags[0])).size).toBeGreaterThan(1)        // 분야를 섞는다
+    const kanji = first.flatMap((w) => Array.from(w.word).filter((ch) => ch >= '一' && ch <= '龥'))
+    expect(new Set(kanji).size).toBe(kanji.length)                              // 같은 한자를 공유하는 단어는 같은 날 안 냄
+    expect(newWords(wordsN5, [], 5)).toEqual(first)                             // 항상 같은 결과
+    const allButOne = wordsN5.slice(1).map((w) => ({ ...progressAfter(0, 'good', now), word_id: w.id }))
+    expect(newWords(wordsN5, allButOne, 5).map((w) => w.id)).toEqual(['n5-0001'])
   })
 
   it('복습 기한: 복습 상태는 오늘 안이면, 짧은 간격 상태는 시각이 지나야 낸다', () => {
@@ -85,10 +92,10 @@ describe('세션 구성', () => {
   })
 
   it('N4 이상은 세션 단어장을 함께 받아 다른 단어 읽기를 오답으로 쓴다', () => {
-    const chi = wordsN4.find((w) => w.word === '血')!
-    const p: WordProgress = { ...progressAfter(0, 'good', now), word_id: chi.id, level: 'N4' }
-    expect(canAskB(chi, p)).toBe(false)              // 소리 변형만으로는 오답 3개가 안 됨
-    expect(canAskB(chi, p, wordsN4)).toBe(true)
+    const inai = wordsN4.find((w) => w.word === '以内')!
+    const p: WordProgress = { ...progressAfter(0, 'good', now), word_id: inai.id, level: 'N4' }
+    expect(canAskB(inai, p)).toBe(false)             // 소리 변형만으로는 오답 3개가 안 됨
+    expect(canAskB(inai, p, wordsN4)).toBe(true)
     expect(buildSession(wordsN4, [], now, OPTS).pool).toBe(wordsN4)
   })
 

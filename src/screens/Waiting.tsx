@@ -21,7 +21,7 @@ export function Waiting({ due, now, count, onNow, onEnd }: Props) {
         <p className="label">잠시 뒤 다시 봅니다</p>
         <p className="countdown">{remainingText(due, now)}</p>
         <p className="muted">다시 볼 카드 {count}개</p>
-        <p className="muted small top-gap">틀린 카드는 10분 뒤에 다시 나옵니다. 기다리지 않으려면 바로 볼 수 있습니다.</p>
+        <p className="muted small top-gap">'다시'는 10분 뒤, '어려움'은 15분 뒤에 다시 나옵니다. 기다리지 않으려면 바로 볼 수 있고, 지금 끝내면 다음에 켤 때 이어서 나옵니다.</p>
       </main>
       <footer className="actions">
         <button className="btn primary" onClick={onNow}>지금 바로 보기</button>

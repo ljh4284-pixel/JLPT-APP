@@ -51,10 +51,69 @@ export function dueWords(words: Word[], progress: WordProgress[], now: Date): Wo
     .filter((w): w is Word => w !== undefined)
 }
 
-/** 아직 한 번도 안 본 단어 중 앞에서 limit 개 */
+/**
+ * 신규로 낼 순서 (검토 반영 2026-10-13). 파일 순서·id 는 바꾸지 않고 여기서만 계산한다.
+ *  - 핵심(tier core) 먼저, 확장(ext)은 뒤에
+ *  - 같은 묶음 안에서는 첫 태그(분야)를 돌아가며 하나씩 꺼내 분야·품사를 섞는다
+ */
+export function newWordOrder(words: Word[]): Word[] {
+  const out: Word[] = []
+  for (const tier of ['core', 'ext']) {
+    const byField = new Map<string, Word[]>()
+    for (const w of words) {
+      if ((w.tier ?? 'core') !== tier) continue
+      const key = w.tags[0] ?? ''
+      const q = byField.get(key)
+      if (q) q.push(w)
+      else byField.set(key, [w])
+    }
+    const queues = Array.from(byField.values())
+    let remaining = queues.reduce((n, q) => n + q.length, 0)
+    while (remaining > 0) {
+      for (const q of queues) {
+        const w = q.shift()
+        if (w) {
+          out.push(w)
+          remaining--
+        }
+      }
+    }
+  }
+  return out
+}
+
+function kanjiOf(s: string): string[] {
+  return Array.from(s).filter((ch) => {
+    const c = ch.codePointAt(0) ?? 0
+    return c >= 0x4e00 && c <= 0x9fff
+  })
+}
+
+/**
+ * 아직 한 번도 안 본 단어 중 limit 개 (newWordOrder 순서).
+ * 같은 한자를 공유하는 단어(以上·以下·以内·以外)는 같은 날 함께 내지 않고 뒤로 미룬다. 모자라면 미룬 것으로 채운다
+ */
 export function newWords(words: Word[], progress: WordProgress[], limit = NEW_PER_SESSION): Word[] {
   const seen = new Set(progress.map((p) => p.word_id))
-  return words.filter((w) => !seen.has(w.id)).slice(0, limit)
+  const unseen = newWordOrder(words).filter((w) => !seen.has(w.id))
+  const picked: Word[] = []
+  const deferred: Word[] = []
+  const usedKanji = new Set<string>()
+  for (const w of unseen) {
+    if (picked.length >= limit) break
+    const ks = kanjiOf(w.word)
+    if (ks.some((k) => usedKanji.has(k))) {
+      deferred.push(w)
+      continue
+    }
+    picked.push(w)
+    for (const k of ks) usedKanji.add(k)
+  }
+  for (const w of deferred) {
+    if (picked.length >= limit) break
+    picked.push(w)
+  }
+  return picked
 }
 
 /** 내일까지 기한인 카드 수 (오늘 기한은 제외) */
@@ -81,7 +140,7 @@ export function interleave<T>(a: T[], b: T[]): T[] {
   return out
 }
 
-/** 뜻 회상(A) 또는 발음 입력(C)에서 한 번이라도 맞힌 적이 있는지 */
+/** 뜻 회상(A) 또는 읽기 입력(C)에서 한 번이라도 맞힌 적이 있는지 */
 export function answeredCorrectlyBefore(p: WordProgress | undefined): boolean {
   if (!p) return false
   return p.review_log.some(
@@ -153,7 +212,7 @@ export function takeNext(s: Session, now: Date, force = false): [NextStep, Sessi
 /**
  * 평가 후 세션 갱신. 짧은 간격 상태가 되면 재출제 대기에 넣는다.
  * 재출제 카드는 이미 한 번 본 뒤이므로, 읽기 고르기를 낼 수 있으면 그것을,
- * 아니면 발음 입력(비중이 0 이면 뜻 회상)을 낸다.
+ * 아니면 읽기 입력(비중이 0 이면 뜻 회상)을 낸다.
  */
 export function afterRating(s: Session, card: SessionCard, rating: Rating, progress: WordProgress, weights?: TypeWeights): Session {
   const next: Session = {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Word } from '../types'
 import wordsJson from '../data/words_n5.json'
 import n4Json from '../data/words_n4.json'
-import { canMakeQuestion, isValidReading, makeDistractors, otherWordCandidates, ruleOrder, toMorae } from './distractors'
+import { BROAD_TAGS, canMakeQuestion, isValidReading, makeDistractors, otherWordCandidates, ruleOrder, toMorae } from './distractors'
 
 const wordsN5 = wordsJson as Word[]
 const wordsN4 = n4Json as Word[]
@@ -104,17 +104,36 @@ describe('N4 이상: 다른 단어 읽기 오답 (PROJECT.md 3장 B)', () => {
     expect(texts.slice(0, 2)).toEqual(['いない', 'いがい'])
   })
 
-  it('후보는 같은 품사, 모라 수 차이 1 이하, 한자 또는 분야 태그 공유인 단어만이다', () => {
+  it('후보는 같은 품사이고 혼동 이유(한자 공유 / 읽기 비슷 / 같은 분야+같은 길이+같은 끝)가 있는 단어만이다', () => {
     const w = byN4('通る')
     const cands = otherWordCandidates(w, wordsN4)
     expect(cands.length).toBeGreaterThan(0)
+    const len = toMorae(w.reading).length
     for (const c of cands) {
-      expect(c.pos).toBe(w.pos)
-      expect(Math.abs(toMorae(c.reading).length - toMorae(w.reading).length)).toBeLessThanOrEqual(1)
-      expect(c.reading).not.toBe(w.reading)
-      const sharesKanji = Array.from(c.word).some((ch) => ch >= '一' && ch <= '龥' && w.word.includes(ch))
-      const sharesTag = c.tags.some((t) => t !== 'katakana' && w.tags.includes(t))
-      expect(sharesKanji || sharesTag).toBe(true)
+      expect(c.word.pos).toBe(w.pos)
+      expect(c.word.reading).not.toBe(w.reading)
+      const m = toMorae(c.word.reading)
+      const sharesKanji = Array.from(c.word.word).some((ch) => ch >= '一' && ch <= '龥' && w.word.includes(ch))
+      const narrowTag = c.word.tags.some((t) => !BROAD_TAGS.has(t) && w.tags.includes(t))
+      const sameLast = m[m.length - 1] === toMorae(w.reading)[len - 1]
+      if (c.reason === 'kanji') expect(sharesKanji).toBe(true)
+      if (c.reason === 'reading') expect(m.length).toBe(len)
+      if (c.reason === 'field') expect(narrowTag && m.length === len && sameLast).toBe(true)
+    }
+    // 넓은 태그(basic)만 공유하는 단어는 후보가 아니다
+    const words = cands.map((c) => c.word.word)
+    expect(words).not.toContain('出席')
+  })
+
+  it('같은 표기의 다른 유효 읽기(alt_readings)는 오답으로 쓰지 않는다', () => {
+    const w = byWord('明日')                   // あした, 다른 읽기 あす
+    expect(w.alt_readings).toContain('あす')
+    const n5 = wordsN5
+    expect(makeDistractors(w, 3, n5).map((x) => x.text)).not.toContain('あす')
+    const withAlt = wordsN4.filter((x) => (x.alt_readings ?? []).length > 0)
+    for (const x of withAlt) {
+      const texts = makeDistractors(x, 3, wordsN4).map((d) => d.text)
+      for (const a of x.alt_readings ?? []) expect(texts).not.toContain(a)
     }
   })
 
@@ -133,17 +152,18 @@ describe('N4 이상: 다른 단어 읽기 오답 (PROJECT.md 3장 B)', () => {
     }
   })
 
-  it('N4 단어의 95% 이상이 읽기 고르기를 낼 수 있고, 90% 이상은 다른 단어 오답이 2개다', () => {
+  it('N4 단어의 95% 이상이 읽기 고르기를 낼 수 있고, 70% 이상은 다른 단어 오답이 2개다', () => {
     const ok = wordsN4.filter((w) => canMakeQuestion(w, wordsN4)).length
     expect(ok / wordsN4.length).toBeGreaterThanOrEqual(0.95)
     const two = wordsN4.filter((w) => makeDistractors(w, 3, wordsN4).filter((x) => x.rule === 'other').length === 2).length
-    expect(two / wordsN4.length).toBeGreaterThanOrEqual(0.9)
+    expect(two / wordsN4.length).toBeGreaterThanOrEqual(0.7)
   })
 
-  it('소리 변형만으로 부족한 N4 단어(血)도 다른 단어 읽기로 문제를 낼 수 있다', () => {
-    const chi = byN4('血')
-    expect(canMakeQuestion(chi)).toBe(false)
-    expect(canMakeQuestion(chi, wordsN4)).toBe(true)
+  it('소리 변형만으로 부족한 N4 단어(以内)도 다른 단어 읽기로 문제를 낼 수 있고, 억지 후보뿐인 단어(血)는 제외한다', () => {
+    const inai = byN4('以内')
+    expect(canMakeQuestion(inai)).toBe(false)
+    expect(canMakeQuestion(inai, wordsN4)).toBe(true)
+    expect(canMakeQuestion(byN4('血'), wordsN4)).toBe(false)
   })
 
   it('N5 는 단어장을 넘겨도 소리 변형만 쓴다 (기존 결과와 같음)', () => {

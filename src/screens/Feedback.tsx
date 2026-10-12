@@ -24,7 +24,7 @@ const AUTOPLAY_DELAY_MS = 400
  * 피드백: 정답/오답, 표기+읽기+뜻+예문, 자기평가 (각 버튼에 다음 복습 간격 표시)
  * 판정-자기평가 규칙 (PROJECT.md 3장 B, C):
  *  - 오답 → '다시'로 고정 (버튼 없음)
- *  - 정답 + 힌트 사용 → '어려움'으로 고정
+ *  - 정답 + 힌트 사용 → '다시'로 고정 (2026-10-13까지는 '어려움')
  *  - 정답 → 어려움/보통/쉬움 중 선택
  *  - 유형 A 는 자동 판정이 없으므로 4버튼 모두
  */
@@ -47,7 +47,7 @@ export function Feedback({ word, questionType, result, intervals, onRate }: Prop
       header = '오답'
       headerClass = 'ng'
     } else if (judged.hintUsed) {
-      fixed = 'hard'
+      fixed = 'again'            // 첫 글자 힌트는 답의 일부 → 기억해 낸 것이 아니므로 '다시' (검토 반영 2026-10-13)
       header = '정답 (힌트 사용)'
       headerClass = 'ok'
     } else {

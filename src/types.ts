@@ -22,7 +22,7 @@ export interface Word {
 /** 자기평가 4단계 */
 export type Rating = 'again' | 'hard' | 'good' | 'easy'
 
-/** 문제 유형 (PROJECT.md 3장). A 뜻 회상, B 읽기 고르기, C 발음 입력 */
+/** 문제 유형 (PROJECT.md 3장). A 뜻 회상, B 읽기 고르기, C 읽기 입력(2026-10-13까지 "발음 입력") */
 export type QuestionType = 'A' | 'B' | 'C'
 
 /** 유형 C 입력 방식: 로마자(실시간 히라가나 변환) / 일본어 자판 직접 입력 */

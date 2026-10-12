@@ -7,7 +7,7 @@ interface Props {
   onClose: () => void
 }
 
-/** 진도: 급수별 학습 단어 수, 정착 단어 수, 정답률과 등급 */
+/** 진도: 급수별 학습 단어 수, 복습 간격이 길어진 단어 수, 정답률과 등급 */
 export function Progress({ levels, accuracy, onClose }: Props) {
   return (
     <>
@@ -26,11 +26,11 @@ export function Progress({ levels, accuracy, onClose }: Props) {
                 <div className="progress-fill learned" style={{ width: `${l.total ? ((l.learned - l.stable) / l.total) * 100 : 0}%` }} />
               </div>
               <span className="muted small">
-                학습 {l.learned} / {l.total} · 정착 {l.stable}
+                학습 {l.learned} / {l.total} · 간격 {STABLE_DAYS}일 이상 {l.stable}
               </span>
             </div>
           ))}
-          <p className="muted small">정착 = 기억이 {STABLE_DAYS}일 이상 유지될 것으로 계산된 단어</p>
+          <p className="muted small">간격 {STABLE_DAYS}일 이상 = 모델상 기억이 90% 남는 기간이 {STABLE_DAYS}일을 넘은 단어. 암기 완료가 아니라 복습 간격이 길어졌다는 뜻이며 계속 복습 대상입니다</p>
         </section>
 
         <section>

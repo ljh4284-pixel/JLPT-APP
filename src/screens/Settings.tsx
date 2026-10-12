@@ -97,7 +97,7 @@ export function Settings({ level, settings, voices, message, onChange, onExport,
         </section>
 
         <section>
-          <h2>발음 입력 방식</h2>
+          <h2>읽기 입력 방식</h2>
           <div className="seg">
             {(['romaji', 'kana'] as InputMode[]).map((m) => (
               <button
