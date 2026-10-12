@@ -8,6 +8,7 @@ import type { QuestionType, Rating, ReviewLogEntry, Word, WordProgress } from '.
 import { applyRating, newCard } from './scheduler'
 import {
   clearAllProgress,
+  deleteProgress,
   loadAllProgress,
   replaceAllProgress,
   requestPersistentStorage,
@@ -67,6 +68,47 @@ export function recordReview(
   store.set(word.id, next)
   void saveProgress(next).catch((e) => console.error('학습 기록 저장 실패', e))
   return next
+}
+
+/** 직전 평가 취소: 그 단어의 기록을 평가 전 상태로 되돌린다. prev 가 없으면(첫 평가였으면) 기록을 지운다 */
+export async function restoreProgress(wordId: string, prev: WordProgress | undefined): Promise<void> {
+  if (prev) {
+    store.set(wordId, prev)
+    await saveProgress(prev)
+  } else {
+    store.delete(wordId)
+    await deleteProgress(wordId)
+  }
+}
+
+/** 단어 일시 제외. 기록이 없으면 빈 카드로 기록을 만든다 (신규에서도 빠지도록) */
+export function suspendWord(word: Word, now: Date): WordProgress {
+  const prev = store.get(word.id)
+  const next: WordProgress = {
+    word_id: word.id,
+    level: word.level,
+    fsrs_card: prev?.fsrs_card ?? newCard(now),
+    review_log: prev?.review_log ?? [],
+    ...(prev?.known_by_test ? { known_by_test: true } : {}),
+    suspended: true,
+  }
+  store.set(word.id, next)
+  void saveProgress(next).catch((e) => console.error('학습 기록 저장 실패', e))
+  return next
+}
+
+/** 제외 해제. 평가 기록이 하나도 없던 단어면 기록을 지워 다시 신규로 돌아간다 */
+export function unsuspendWord(wordId: string): void {
+  const prev = store.get(wordId)
+  if (!prev) return
+  if (prev.review_log.length === 0) {
+    store.delete(wordId)
+    void deleteProgress(wordId).catch((e) => console.error('학습 기록 저장 실패', e))
+    return
+  }
+  const next: WordProgress = { ...prev, suspended: false }
+  store.set(wordId, next)
+  void saveProgress(next).catch((e) => console.error('학습 기록 저장 실패', e))
 }
 
 /** 기록 전체를 바꾼다 (백업 불러오기) */

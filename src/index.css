@@ -222,3 +222,11 @@ body { background: var(--bg); }
 .meaning .pos { font-size: 0.8rem; font-weight: normal; opacity: 0.6; margin-left: 0.4rem; }
 .example.blank { margin-top: 0.75rem; }
 .example.blank p[lang="ja"] { font-size: 1.15rem; line-height: 1.6; }
+
+/* 3단계: 끝내기·되돌리기, 단어 제외, 제외 목록 (2026-10-13) */
+.topbar-actions { display: flex; gap: 12px; align-items: center; }
+.link.quiet { color: var(--muted); text-decoration: none; font-size: 13px; }
+.suspend-row { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; }
+.suspended-list { list-style: none; padding: 0; margin: 0; }
+.suspended-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e4e4ea; }
+.btn.rate:disabled { opacity: 0.6; }

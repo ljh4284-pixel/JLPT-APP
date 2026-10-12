@@ -5,6 +5,7 @@ interface Props {
   availableLevels: readonly string[]   // 단어장이 준비된 급수
   dueCount: number
   newCount: number
+  pendingCount: number       // 곧 다시 볼 카드 수 (다시·어려움 직후, 아직 기한 전)
   learnedCount: number       // 기록이 있는 단어 수
   message: string | null     // 불러오기 결과 등 한 줄 안내
   onLevelChange: (level: string) => void
@@ -15,7 +16,7 @@ interface Props {
 
 /** 홈: 급수 선택, 오늘 복습/신규 개수, [시작], 진도·설정으로 가는 링크 */
 export function Home({
-  level, availableLevels, dueCount, newCount, learnedCount, message, onLevelChange, onStart, onProgress, onSettings,
+  level, availableLevels, dueCount, newCount, pendingCount, learnedCount, message, onLevelChange, onStart, onProgress, onSettings,
 }: Props) {
   const total = dueCount + newCount
   return (
@@ -46,7 +47,8 @@ export function Home({
         <p className="counts">
           오늘 복습 <b>{dueCount}</b>개 · 신규 <b>{newCount}</b>개
         </p>
-        {total === 0 && <p className="muted small">오늘 할 카드가 없습니다</p>}
+        {total === 0 && <p className="muted small">{pendingCount > 0 ? '지금 할 카드는 없습니다' : '오늘 할 카드가 없습니다'}</p>}
+        {pendingCount > 0 && <p className="muted small">곧 다시 볼 카드 {pendingCount}개 (기한이 되면 복습에 들어옵니다)</p>}
         <p className="muted small top-gap">학습한 단어 {learnedCount}개 · 기록은 이 기기에 자동 저장됩니다</p>
         {message && <p className="message">{message}</p>}
       </main>

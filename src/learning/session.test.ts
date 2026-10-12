@@ -64,6 +64,18 @@ describe('세션 구성', () => {
     expect(newWords(wordsN5, allButOne, 5).map((w) => w.id)).toEqual(['n5-0001'])
   })
 
+  it('하루 신규 한도는 날짜 기준이라 세션을 다시 시작해도 늘지 않고, 제외한 단어는 나오지 않는다', () => {
+    const first = newWords(wordsN5, [], 5, now)
+    const learnedToday = first.map((w) => ({ ...progressAfter(0, 'good', now), word_id: w.id }))
+    expect(newWords(wordsN5, learnedToday, 5, now)).toHaveLength(0)                       // 오늘 5개 했으면 더 안 줌
+    expect(newWords(wordsN5, learnedToday, 7, now)).toHaveLength(2)                       // 한도를 7로 올리면 2개만
+    const tomorrow = new Date('2026-10-13T09:00:00')
+    expect(newWords(wordsN5, learnedToday, 5, tomorrow)).toHaveLength(5)                  // 다음 날은 다시 5개
+    const suspendedOne: WordProgress = { ...progressAfter(0, 'good', now), review_log: [], suspended: true }
+    expect(newWords(wordsN5, [suspendedOne], 5, now).map((w) => w.id)).not.toContain(wordsN5[0].id)
+    expect(dueWords(wordsN5, [{ ...progressAfter(0, 'again', now), suspended: true }], new Date(now.getTime() + 11 * 60000))).toHaveLength(0)
+  })
+
   it('복습 기한: 복습 상태는 오늘 안이면, 짧은 간격 상태는 시각이 지나야 낸다', () => {
     const good = progressAfter(0, 'good', now)                       // 2일 뒤
     expect(isDueToday(good, now)).toBe(false)

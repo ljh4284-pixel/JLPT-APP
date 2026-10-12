@@ -45,6 +45,11 @@ export async function saveProgress(p: WordProgress): Promise<void> {
   await db.progress.put(p)
 }
 
+/** 한 단어의 기록 삭제 (직전 평가 취소로 첫 기록을 되돌릴 때) */
+export async function deleteProgress(wordId: string): Promise<void> {
+  await db.progress.delete(wordId)
+}
+
 /** 전부 지우고 주어진 목록으로 바꾼다 (불러오기용) */
 export async function replaceAllProgress(list: WordProgress[]): Promise<void> {
   await db.transaction('rw', db.progress, async () => {

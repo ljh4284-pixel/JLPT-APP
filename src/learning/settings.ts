@@ -17,7 +17,12 @@ export interface Settings {
   weightsByLevel: Record<string, TypeWeights> // 급수별 문제 유형 비중
   inputMode: InputMode
   voice: string                              // 목소리 이름 (audio.ts 의 VOICE_NAME 과 같은 체계)
+  sessionMinutes: number                     // 세션 시간 제한(분). 0 이면 제한 없음 (2026-10-13)
+  lastBackupAt: string | null                // 마지막 백업 시각 ISO (2026-10-13)
 }
+
+/** 세션 시간 제한 선택지 (분). 0 = 제한 없음 */
+export const SESSION_MINUTE_OPTIONS: readonly number[] = [0, 5, 10]
 
 export const MAX_WEIGHT = 3
 export const MIN_NEW_PER_DAY = 1
@@ -42,6 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   weightsByLevel: DEFAULT_WEIGHTS,
   inputMode: 'romaji',
   voice: 'ja-JP-Chirp3-HD-Charon',
+  sessionMinutes: 0,
+  lastBackupAt: null,
 }
 
 export const SETTINGS_KEY = 'settings'
@@ -72,6 +79,8 @@ export function normalizeSettings(raw: unknown): Settings {
     weightsByLevel,
     inputMode: r.inputMode === 'kana' ? 'kana' : 'romaji',
     voice: typeof r.voice === 'string' && r.voice ? r.voice : DEFAULT_SETTINGS.voice,
+    sessionMinutes: typeof r.sessionMinutes === 'number' && SESSION_MINUTE_OPTIONS.includes(r.sessionMinutes) ? r.sessionMinutes : 0,
+    lastBackupAt: typeof r.lastBackupAt === 'string' ? r.lastBackupAt : null,
   }
 }
 

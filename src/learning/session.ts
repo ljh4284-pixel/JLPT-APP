@@ -41,11 +41,24 @@ export function isDueToday(p: WordProgress, now: Date): boolean {
   return card.state === State.Review && card.due.getTime() <= endOfDay(now).getTime()
 }
 
-/** 오늘 복습 대상 단어 (기한 빠른 순) */
+/** 같은 날인지 (기기 시간 기준) */
+export function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+/** 오늘 처음 학습을 시작한 단어 수 (이 단어장 안에서). 하루 신규 한도에서 뺀다 (검토 반영 2026-10-13) */
+export function startedToday(words: Word[], progress: WordProgress[], now: Date): number {
+  const ids = new Set(words.map((w) => w.id))
+  return progress.filter(
+    (p) => ids.has(p.word_id) && !p.suspended && p.review_log.length > 0 && sameDay(new Date(p.review_log[0].date), now),
+  ).length
+}
+
+/** 오늘 복습 대상 단어 (기한 빠른 순). 제외한 단어는 빠진다 */
 export function dueWords(words: Word[], progress: WordProgress[], now: Date): Word[] {
   const byId = new Map(words.map((w) => [w.id, w]))
   return progress
-    .filter((p) => isDueToday(p, now))
+    .filter((p) => !p.suspended && isDueToday(p, now))
     .sort((a, b) => a.fsrs_card.due.getTime() - b.fsrs_card.due.getTime())
     .map((p) => byId.get(p.word_id))
     .filter((w): w is Word => w !== undefined)
@@ -91,16 +104,19 @@ function kanjiOf(s: string): string[] {
 
 /**
  * 아직 한 번도 안 본 단어 중 limit 개 (newWordOrder 순서).
- * 같은 한자를 공유하는 단어(以上·以下·以内·以外)는 같은 날 함께 내지 않고 뒤로 미룬다. 모자라면 미룬 것으로 채운다
+ *  - now 를 주면 오늘 이미 시작한 신규 수를 한도에서 뺀다 (세션을 다시 시작해도 하루 한도를 넘지 않음)
+ *  - 제외한 단어는 기록이 있으므로 신규에서 빠진다
+ *  - 같은 한자를 공유하는 단어(以上·以下·以内·以外)는 같은 날 함께 내지 않고 뒤로 미룬다. 모자라면 미룬 것으로 채운다
  */
-export function newWords(words: Word[], progress: WordProgress[], limit = NEW_PER_SESSION): Word[] {
+export function newWords(words: Word[], progress: WordProgress[], limit = NEW_PER_SESSION, now?: Date): Word[] {
   const seen = new Set(progress.map((p) => p.word_id))
+  const quota = now ? Math.max(0, limit - startedToday(words, progress, now)) : limit
   const unseen = newWordOrder(words).filter((w) => !seen.has(w.id))
   const picked: Word[] = []
   const deferred: Word[] = []
   const usedKanji = new Set<string>()
   for (const w of unseen) {
-    if (picked.length >= limit) break
+    if (picked.length >= quota) break
     const ks = kanjiOf(w.word)
     if (ks.some((k) => usedKanji.has(k))) {
       deferred.push(w)
@@ -110,7 +126,7 @@ export function newWords(words: Word[], progress: WordProgress[], limit = NEW_PE
     for (const k of ks) usedKanji.add(k)
   }
   for (const w of deferred) {
-    if (picked.length >= limit) break
+    if (picked.length >= quota) break
     picked.push(w)
   }
   return picked
@@ -181,7 +197,7 @@ export function buildSession(words: Word[], progress: WordProgress[], now: Date,
   const byId = new Map(progress.map((p) => [p.word_id, p]))
   const cycle = typeCycle(options.weights)
   const reviews = dueWords(words, progress, now).map((word) => ({ word, isNew: false }))
-  const fresh = newWords(words, progress, options.newPerDay).map((word) => ({ word, isNew: true }))
+  const fresh = newWords(words, progress, options.newPerDay, now).map((word) => ({ word, isNew: true }))
   const mixed = interleave(reviews, fresh)
   let reviewPos = 0
   let newPos = 0

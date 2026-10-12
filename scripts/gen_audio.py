@@ -12,9 +12,15 @@ Google Cloud Text-to-Speech 로 단어 발음 mp3 를 만드는 개발용 스크
   python scripts/gen_audio.py --generate      모든 급수 × 모든 목소리. 단어 mp3 → public/audio/<급수>/<목소리>/<id>.mp3
       [--level n5] [--voice 이름]            특정 급수·목소리만
                                               예문 mp3 → public/audio/n5/<VOICE_NAME>/<id>_ex.mp3 (example_ja 를 읽음)
-                                              이미 있는 파일은 건너뜀. 끝나면 words_n5.json 의 audio 필드 채움
+                                              끝나면 words_<급수>.json 의 audio 필드 채움
+
+재생성 기준 (검토 반영 2026-10-13): 파일이 있어도 "입력 문장 + 목소리 + 속도 + 형식"의 해시가
+  scripts/audio_manifest.json 에 적힌 값과 다르면 다시 만든다 (예문을 고쳤는데 옛 음성이 남는 것 방지).
+  manifest 에 없는 기존 파일은 현재 문장 기준으로 등록만 한다. 기존 파일을 다시 만들었으면 끝에 안내를 출력한다
+  (public/sw.js 의 CACHE 이름을 올려야 설치된 앱이 새 파일을 받는다).
 """
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -37,6 +43,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT, ".env")
 SAMPLES_DIR = os.path.join(ROOT, "scripts", "samples")
 AUDIO_ROOT = os.path.join(ROOT, "public", "audio")
+MANIFEST_PATH = os.path.join(ROOT, "scripts", "audio_manifest.json")
 
 
 def setup_auth():
@@ -135,49 +142,86 @@ def cmd_samples():
         print(f"  생성: {name} ({gender}) → {os.path.relpath(out, ROOT)}")
 
 
-def generate_level_voice(tts, client, level, voice):
-    """한 급수의 단어·예문을 한 목소리로 생성한다. 있는 파일은 건너뛴다"""
+# ---------------------------------------------------------------------------
+# manifest: 파일별 "무엇으로 만들었는지" 해시
+# ---------------------------------------------------------------------------
+def load_manifest():
+    if os.path.exists(MANIFEST_PATH):
+        with open(MANIFEST_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_manifest(m):
+    with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+        json.dump(m, f, ensure_ascii=False, indent=0, sort_keys=True)
+        f.write(chr(10))
+
+
+def content_hash(text, voice):
+    return hashlib.sha1(f"{voice}|{SPEAKING_RATE}|{AUDIO_FORMAT}|{text}".encode("utf-8")).hexdigest()[:16]
+
+
+def ensure_file(tts, client, manifest, key, text, voice, out, stats):
+    """파일이 없거나 manifest 의 해시가 다르면 만든다. 있는데 manifest 에 없으면 등록만 한다"""
+    h = content_hash(text, voice)
+    exists = os.path.exists(out) and os.path.getsize(out) > 0
+    if exists and manifest.get(key) == h:
+        stats["skipped"] += 1
+        return False
+    if exists and key not in manifest:
+        manifest[key] = h
+        stats["adopted"] += 1
+        return False
+    synthesize(tts, client, text, voice, out)
+    manifest[key] = h
+    stats["regenerated" if exists else "made"] += 1
+    return True
+
+
+def generate_level_voice(tts, client, level, voice, manifest):
+    """한 급수의 단어·예문을 한 목소리로 생성한다"""
     words_path = os.path.join(ROOT, "src", "data", f"words_{level}.json")
     with open(words_path, encoding="utf-8") as f:
         words = json.load(f)
     out_dir = os.path.join(AUDIO_ROOT, level, voice)
     os.makedirs(out_dir, exist_ok=True)
-    made, skipped = 0, 0
+    stats = {"made": 0, "regenerated": 0, "skipped": 0, "adopted": 0}
     for w in words:
+        base = f"{level}/{voice}/{w['id']}"
         # 단어: 읽기(히라가나)를 읽는다 → <id>.mp3
-        out = os.path.join(out_dir, f"{w['id']}.mp3")
-        if os.path.exists(out) and os.path.getsize(out) > 0:
-            skipped += 1
-        else:
-            synthesize(tts, client, w["reading"], voice, out)
-            made += 1
+        if ensure_file(tts, client, manifest, base, w["reading"], voice, os.path.join(out_dir, f"{w['id']}.mp3"), stats):
             print(f"  생성: {w['id']} {w['word']} ({w['reading']})")
         w["audio"] = str(w["id"])
-
         # 예문: 한자 문장(example_ja)을 읽는다 → <id>_ex.mp3
-        # 한자를 주면 억양이 자연스럽다. 대신 두 가지로 읽히는 한자(明日, 家 등)는 들어서 확인한다.
-        out_ex = os.path.join(out_dir, f"{w['id']}{EXAMPLE_SUFFIX}.mp3")
-        if os.path.exists(out_ex) and os.path.getsize(out_ex) > 0:
-            skipped += 1
-        else:
-            synthesize(tts, client, w["example_ja"], voice, out_ex)
-            made += 1
+        # 한자를 주면 억양이 자연스럽다. 대신 두 가지로 읽히는 한자(明日, 家 등)는 들어서 확인한다 (review_content.py 목록)
+        if ensure_file(tts, client, manifest, base + EXAMPLE_SUFFIX, w["example_ja"], voice,
+                       os.path.join(out_dir, f"{w['id']}{EXAMPLE_SUFFIX}.mp3"), stats):
             print(f"  생성: {w['id']}{EXAMPLE_SUFFIX} {w['example_ja']}")
 
     # words_<급수>.json 저장: 한 항목당 한 줄 형식 유지 (audio 필드 채움)
     with open(words_path, "w", encoding="utf-8") as f:
         lines = ["  " + json.dumps(w, ensure_ascii=False) for w in words]
         f.write("[" + chr(10) + ("," + chr(10)).join(lines) + chr(10) + "]" + chr(10))
-    print(f"[{level} / {voice}] 새로 생성 {made}개, 건너뜀 {skipped}개 (단어+예문 파일 수)")
+    print(f"[{level} / {voice}] 새로 생성 {stats['made']}개, 다시 생성 {stats['regenerated']}개, "
+          f"건너뜀 {stats['skipped']}개, 기존 파일 등록 {stats['adopted']}개 (단어+예문 파일 수)")
+    return stats["regenerated"]
 
 
 def cmd_generate(level=None, voice=None):
     levels = [level] if level else LEVELS
     voices = [voice] if voice else VOICE_NAMES
     tts, client = make_client()
-    for lv in levels:
-        for vc in voices:
-            generate_level_voice(tts, client, lv, vc)
+    manifest = load_manifest()
+    regenerated = 0
+    try:
+        for lv in levels:
+            for vc in voices:
+                regenerated += generate_level_voice(tts, client, lv, vc, manifest)
+    finally:
+        save_manifest(manifest)
+    if regenerated:
+        print(f"기존 음성 {regenerated}개를 다시 만들었습니다. public/sw.js 의 CACHE 이름을 올려야 설치된 앱이 새 파일을 받습니다.")
 
 
 def main():

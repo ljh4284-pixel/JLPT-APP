@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { JudgeResult, QuestionType, Rating, Word } from '../types'
 import { playExample, playWord } from '../platform/audio'
 
@@ -8,7 +8,11 @@ interface Props {
   result?: JudgeResult                 // 유형 B, C 일 때만 있음
   intervals: Record<Rating, string>    // 각 버튼을 눌렀을 때의 다음 복습까지 간격 ("10분", "2일")
   onRate: (rating: Rating) => void
+  onSuspend: () => void                // 이 단어를 학습에서 일시 제외 (문제가 있는 단어 신고)
 }
+
+/** 화면이 뜬 직후 잠깐은 평가 버튼을 막는다 (앞 화면에서 누른 손가락이 그대로 눌리는 것 방지) */
+const GUARD_MS = 300
 
 const LABEL: Record<Rating, string> = {
   again: '다시',
@@ -28,7 +32,13 @@ const AUTOPLAY_DELAY_MS = 400
  *  - 정답 → 어려움/보통/쉬움 중 선택
  *  - 유형 A 는 자동 판정이 없으므로 4버튼 모두
  */
-export function Feedback({ word, questionType, result, intervals, onRate }: Props) {
+export function Feedback({ word, questionType, result, intervals, onRate, onSuspend }: Props) {
+  const [ready, setReady] = useState(false)
+  const [confirmSuspend, setConfirmSuspend] = useState(false)
+  useEffect(() => {
+    const id = setTimeout(() => setReady(true), GUARD_MS)
+    return () => clearTimeout(id)
+  }, [word])
   useEffect(() => {
     if (questionType !== 'B') return
     const id = setTimeout(() => playWord(word), AUTOPLAY_DELAY_MS)
@@ -81,6 +91,19 @@ export function Feedback({ word, questionType, result, intervals, onRate }: Prop
             🔊 예문 듣기
           </button>
         </div>
+        <div className="suspend-row">
+          {confirmSuspend ? (
+            <>
+              <span className="muted small">이 단어를 학습에서 빼고 다음으로 넘어갑니다. 설정에서 복구할 수 있습니다</span>
+              <button type="button" className="link danger" onClick={onSuspend}>제외</button>
+              <button type="button" className="link" onClick={() => setConfirmSuspend(false)}>취소</button>
+            </>
+          ) : (
+            <button type="button" className="link quiet" onClick={() => setConfirmSuspend(true)}>
+              이 단어에 문제가 있어요 (일시 제외)
+            </button>
+          )}
+        </div>
       </main>
 
       {fixed ? (
@@ -88,14 +111,14 @@ export function Feedback({ word, questionType, result, intervals, onRate }: Prop
           <p className="note">
             '{LABEL[fixed]}'(으)로 기록됩니다 · 다음 복습 {intervals[fixed]} 뒤
           </p>
-          <button className={`btn rate ${fixed}`} onClick={() => onRate(fixed)}>
+          <button className={`btn rate ${fixed}`} disabled={!ready} onClick={() => onRate(fixed)}>
             다음
           </button>
         </footer>
       ) : (
         <footer className={`actions grid${choices.length}`}>
           {choices.map((r) => (
-            <button key={r} className={`btn rate ${r}`} onClick={() => onRate(r)}>
+            <button key={r} className={`btn rate ${r}`} disabled={!ready} onClick={() => onRate(r)}>
               {LABEL[r]}
               <span className="sub">{intervals[r]}</span>
             </button>

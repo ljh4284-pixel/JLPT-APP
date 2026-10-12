@@ -3,7 +3,7 @@
  *
  * 1) public/audio/<level>/<voice>/ 에 mp3 가 있으면 그 파일을 재생
  *      단어: <id>.mp3   예문: <id>_ex.mp3
- * 2) 없거나 재생에 실패하면 브라우저 Web Speech API 일본어 음성으로 읽는다
+ * 2) 없거나 재생에 실패하면 브라우저 Web Speech API 의 기기 내 일본어 음성으로 읽는다 (원격 음성은 쓰지 않음)
  */
 import type { Word } from '../types'
 
@@ -36,12 +36,20 @@ function stopAll() {
   }
 }
 
+/**
+ * 폴백: 브라우저 음성 합성. 기기 안에서 처리되는(localService) 일본어 음성만 쓴다.
+ * 원격 서버로 보내는 음성은 쓰지 않는다 (런타임 외부 호출 금지 원칙, 검토 반영 2026-10-13). 없으면 재생하지 않는다
+ */
 function speakFallback(text: string) {
   if (!('speechSynthesis' in window)) return
+  const ja = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith('ja') && v.localService)
+  if (!ja) {
+    console.info('기기 내 일본어 음성이 없어 폴백 재생을 건너뜁니다')
+    return
+  }
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'ja-JP'
-  const ja = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith('ja'))
-  if (ja) u.voice = ja
+  u.voice = ja
   window.speechSynthesis.speak(u)
 }
 

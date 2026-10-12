@@ -52,6 +52,7 @@ export interface WordProgress {
   fsrs_card: Card       // ts-fsrs 카드 (difficulty, stability, due, state, reps, lapses, last_review ...)
   review_log: ReviewLogEntry[]
   known_by_test?: boolean   // 레벨 테스트로 "안다"고 판정된 단어 (8단계). 없으면 false
+  suspended?: boolean       // 사용자가 일시 제외한 단어 (문제가 있는 단어 신고). 세션에 내지 않는다. 설정에서 복구 (2026-10-13)
 }
 
 /** 세션 대기열의 카드 한 장 */

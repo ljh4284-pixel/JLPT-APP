@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react'
-import type { JudgeResult, Rating, SessionCard, Word } from './types'
+import { useEffect, useRef, useState } from 'react'
+import type { JudgeResult, Rating, SessionCard, Word, WordProgress } from './types'
 import { availableLevels, loadWords } from './data/words'
 import {
   allProgress,
   currentCard,
+  getProgress,
   initProgress,
   recordReview,
   replaceProgress,
   resetProgress,
+  restoreProgress,
+  suspendWord,
+  unsuspendWord,
 } from './learning/progress'
-import { formatInterval, previewDue } from './learning/scheduler'
+import { formatInterval, isShortTerm, previewDue } from './learning/scheduler'
 import {
   afterRating,
   buildSession,
@@ -58,6 +62,15 @@ const VOICES = [
 /** 목소리 들어보기에 쓸 단어 id (病院は美容院の隣です。) */
 const SAMPLE_WORD_ID = 'n5-0013'
 
+/** 직전 평가를 되돌리기 위해 기억해 두는 것 (한 단계만) */
+interface LastRated {
+  card: SessionCard
+  prevProgress: WordProgress | undefined   // 평가 전 기록 (없었으면 undefined → 기록 삭제로 되돌림)
+  prevSession: Session                     // 평가 전 세션 (그 카드는 이미 대기열에서 빠진 상태)
+  prevResult: JudgeResult | undefined
+  cardShownAt: number
+}
+
 function App() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [settings, setSettingsState] = useState<SettingsValue>(() => normalizeSettings(undefined))
@@ -66,9 +79,14 @@ function App() {
   const [current, setCurrent] = useState<SessionCard | null>(null)
   const [result, setResult] = useState<JudgeResult | undefined>(undefined)
   const [cardShownAt, setCardShownAt] = useState(0)   // 카드가 보인 시각 (소요 시간 측정)
+  const [sessionStartedAt, setSessionStartedAt] = useState(0)
+  const [timeUp, setTimeUp] = useState(false)          // 세션 시간 제한으로 끝났는지
+  const [lastRated, setLastRated] = useState<LastRated | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [progressLevels, setProgressLevels] = useState<LevelStats[]>([])
   const [now, setNow] = useState(() => new Date())   // 화면 표시용 현재 시각 (1초마다 갱신)
+  const [, setVersion] = useState(0)                 // 기록 저장소가 바뀌었을 때 다시 그리기용
+  const rateLock = useRef(false)                     // 평가 버튼 중복 입력 방지
 
   const level = settings.level
 
@@ -111,8 +129,22 @@ function App() {
     }
   }, [level])
 
-  /** 세션에서 다음 할 일을 꺼내 화면을 정한다 */
+  /** 세션 시간 제한이 지났는지 (0 이면 제한 없음) */
+  function timeLimitReached(at: number): boolean {
+    return settings.sessionMinutes > 0 && sessionStartedAt > 0 && at - sessionStartedAt >= settings.sessionMinutes * 60_000
+  }
+
+  /** 세션에서 다음 할 일을 꺼내 화면을 정한다. 시간 제한이 지났으면 현재 문제까지만 하고 끝낸다 */
   function advance(s: Session, force = false) {
+    rateLock.current = false
+    if (timeLimitReached(Date.now())) {
+      setSession(s)
+      setCurrent(null)
+      setResult(undefined)
+      setTimeUp(true)
+      setPhase('done')
+      return
+    }
     const [step, next] = takeNext(s, new Date(), force)
     setSession(next)
     setResult(undefined)
@@ -150,7 +182,17 @@ function App() {
 
   function start() {
     setMessage(null)
-    advance(buildSession(words, allProgress(), new Date(), { newPerDay: settings.newPerDay, weights }))
+    setTimeUp(false)
+    setLastRated(null)
+    setSessionStartedAt(Date.now())
+    const at = new Date()
+    advance(buildSession(words, allProgress(), at, { newPerDay: settings.newPerDay, weights }))
+  }
+
+  /** 문제 도중 끝내기: 지금 카드까지의 기록은 이미 저장돼 있고, 남은 카드는 다음에 켤 때 그대로 나온다 */
+  function endNow() {
+    setResult(undefined)
+    setPhase('done')
   }
 
   /** 읽기 고르기(B)·읽기 입력(C)의 자동 판정 결과를 받아 피드백으로 간다 */
@@ -160,9 +202,11 @@ function App() {
   }
 
   function rate(rating: Rating) {
-    if (!current) return
+    if (!current || phase !== 'feedback' || rateLock.current) return   // 같은 버튼을 두 번 누르거나 화면이 바뀐 뒤 들어온 입력은 무시
+    rateLock.current = true
     const at = new Date()
     const judged = result ? (result.correct ? 'correct' : 'wrong') : null
+    setLastRated({ card: current, prevProgress: getProgress(current.word.id), prevSession: session, prevResult: result, cardShownAt })
     const progress = recordReview(current.word, current.questionType, rating, judged, at, Date.now() - cardShownAt)
     const detail = result ? ` 판정=${result.correct ? '정답' : '오답'} 입력="${result.answer}" 힌트=${result.hintUsed}` : ''
     console.log(
@@ -170,6 +214,35 @@ function App() {
         ` | 다음 복습 ${formatInterval(at, progress.fsrs_card.due)} 뒤 (${progress.fsrs_card.due.toLocaleString()})`,
     )
     advance(afterRating(session, current, rating, progress, weights))
+  }
+
+  /** 직전 평가 취소: 기록을 평가 전으로 되돌리고 그 카드의 피드백 화면으로 돌아간다 (한 단계만) */
+  async function undoLastRating() {
+    if (!lastRated) return
+    const { card, prevProgress, prevSession, prevResult, cardShownAt: shownAt } = lastRated
+    setLastRated(null)
+    await restoreProgress(card.word.id, prevProgress)
+    setSession(prevSession)
+    setCurrent(card)
+    setResult(prevResult)
+    setCardShownAt(shownAt)
+    rateLock.current = false
+    setPhase('feedback')
+  }
+
+  /** 이 단어를 학습에서 일시 제외하고 다음 카드로 (평가 없이). 설정에서 복구할 수 있다 */
+  function suspendCurrent() {
+    if (!current) return
+    suspendWord(current.word, new Date())
+    setLastRated(null)
+    setMessage(`'${current.word.word}'을(를) 제외했습니다. 설정에서 복구할 수 있습니다`)
+    advance(session)
+  }
+
+  function restoreSuspended(wordId: string) {
+    unsuspendWord(wordId)
+    setVersion((v) => v + 1)
+    setMessage('단어를 다시 학습에 넣었습니다')
   }
 
   /** 진도 화면: 준비된 모든 급수의 단어장을 읽어 급수별 통계를 만든다 */
@@ -183,9 +256,11 @@ function App() {
 
   // ---- 기록 내보내기 / 불러오기 / 초기화 ----
   async function exportBackup() {
-    const all = await loadAllSettings()
     const at = new Date()
+    const next = { ...settings, lastBackupAt: at.toISOString() }
+    const all = { ...(await loadAllSettings()), [SETTINGS_KEY]: next }
     downloadText(backupFilename(at), serializeBackup(allProgress(), all, at))
+    updateSettings(next)
     setMessage('백업 파일을 내려받았습니다')
   }
 
@@ -213,9 +288,16 @@ function App() {
   // ---- 화면별 표시값 ----
   const progressList = allProgress()
   const dueCount = dueWords(words, progressList, now).length
-  const newCount = newWords(words, progressList, settings.newPerDay).length
-  const learnedCount = progressList.filter((p) => p.level === level).length
+  const newCount = newWords(words, progressList, settings.newPerDay, now).length
+  const learnedCount = progressList.filter((p) => p.level === level && !p.suspended).length
+  // 짧은 간격 상태(다시·어려움 직후)인데 아직 기한이 안 된 카드: 홈에서 "곧 다시 볼 카드"로 보여준다
+  const pendingCount = progressList.filter(
+    (p) => p.level === level && !p.suspended && isShortTerm(p.fsrs_card) && p.fsrs_card.due.getTime() > now.getTime(),
+  ).length
   const sampleWord = words.find((w) => w.id === SAMPLE_WORD_ID) ?? words[0] ?? null
+  const suspended = progressList
+    .filter((p) => p.suspended)
+    .map((p) => ({ id: p.word_id, label: words.find((w) => w.id === p.word_id)?.word ?? p.word_id }))
 
   const intervals = current
     ? (() => {
@@ -230,18 +312,25 @@ function App() {
     : { again: '', hard: '', good: '', easy: '' }
 
   const waitStep = phase === 'wait' ? peekNext(session, now) : null
-  const remaining = session.queue.length + session.relearn.length + (current ? 1 : 0)
+  const inSession = phase === 'present' || phase === 'question' || phase === 'feedback'
+  const remaining = session.queue.length + session.relearn.length + (current && inSession ? 1 : 0)
   const total = session.answered + remaining
 
   return (
     <div className="app">
-      {current && (phase === 'present' || phase === 'question' || phase === 'feedback') && (
+      {current && inSession && (
         <header className="topbar">
           <span>
             {level} · {TYPE_LABEL[current.questionType]}
             {current.isNew ? ' · 신규' : ' · 복습'}
           </span>
-          <span>{session.answered + 1} / {total}</span>
+          <span className="topbar-actions">
+            {lastRated && (
+              <button type="button" className="link" onClick={() => void undoLastRating()}>되돌리기</button>
+            )}
+            <button type="button" className="link" onClick={endNow}>끝내기</button>
+            <span className="muted">{session.answered + 1} / {total}</span>
+          </span>
         </header>
       )}
 
@@ -268,6 +357,7 @@ function App() {
           availableLevels={availableLevels()}
           dueCount={dueCount}
           newCount={newCount}
+          pendingCount={pendingCount}
           learnedCount={learnedCount}
           message={message}
           onLevelChange={(l) => updateSettings({ ...settings, level: l })}
@@ -288,8 +378,10 @@ function App() {
           level={level}
           settings={settings}
           voices={VOICES}
+          suspended={suspended}
           message={message}
           onChange={updateSettings}
+          onRestore={restoreSuspended}
           onExport={() => void exportBackup()}
           onImport={() => void importBackup()}
           onReset={() => void resetAll()}
@@ -314,11 +406,13 @@ function App() {
       )}
       {phase === 'feedback' && current && (
         <Feedback
+          key={`${current.word.id}-${session.answered}`}
           word={current.word}
           questionType={current.questionType}
           result={result}
           intervals={intervals}
           onRate={rate}
+          onSuspend={suspendCurrent}
         />
       )}
       {phase === 'wait' && waitStep?.kind === 'wait' && (
@@ -336,8 +430,15 @@ function App() {
           correct={session.correct}
           tomorrowCount={dueTomorrowCount(progressList, now)}
           pendingCount={session.relearn.length}
+          remainingCount={session.queue.length + (current ? 1 : 0)}
+          timeUp={timeUp}
+          sessionMinutes={settings.sessionMinutes}
+          message={message}
           onHome={() => {
             setSession(EMPTY_SESSION)
+            setCurrent(null)
+            setLastRated(null)
+            setMessage(null)
             setPhase('home')
           }}
         />
