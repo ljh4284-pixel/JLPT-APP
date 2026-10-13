@@ -388,7 +388,9 @@ function App() {
           onClose={() => { setMessage(null); setPhase('home') }}
         />
       )}
-      {phase === 'present' && current && <Present word={current.word} onNext={() => setPhase('question')} />}
+      {phase === 'present' && current && (
+        <Present word={current.word} showHanja={settings.showHanja} onNext={() => setPhase('question')} />
+      )}
       {phase === 'question' && current && current.questionType === 'A' && (
         <QuestionA word={current.word} onReveal={() => setPhase('feedback')} />
       )}
@@ -413,6 +415,7 @@ function App() {
           intervals={intervals}
           onRate={rate}
           onSuspend={suspendCurrent}
+          showHanja={settings.showHanja}
         />
       )}
       {phase === 'wait' && waitStep?.kind === 'wait' && (

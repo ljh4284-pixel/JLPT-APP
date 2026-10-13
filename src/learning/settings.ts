@@ -18,6 +18,7 @@ export interface Settings {
   inputMode: InputMode
   voice: string                              // 목소리 이름 (audio.ts 의 VOICE_NAME 과 같은 체계)
   sessionMinutes: number                     // 세션 시간 제한(분). 0 이면 제한 없음 (2026-10-13)
+  showHanja: boolean                         // 단어 제시·정답 화면에 한자 훈음 표시 (2026-10-14)
   lastBackupAt: string | null                // 마지막 백업 시각 ISO (2026-10-13)
 }
 
@@ -48,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inputMode: 'romaji',
   voice: 'ja-JP-Chirp3-HD-Charon',
   sessionMinutes: 0,
+  showHanja: true,
   lastBackupAt: null,
 }
 
@@ -80,6 +82,7 @@ export function normalizeSettings(raw: unknown): Settings {
     inputMode: r.inputMode === 'kana' ? 'kana' : 'romaji',
     voice: typeof r.voice === 'string' && r.voice ? r.voice : DEFAULT_SETTINGS.voice,
     sessionMinutes: typeof r.sessionMinutes === 'number' && SESSION_MINUTE_OPTIONS.includes(r.sessionMinutes) ? r.sessionMinutes : 0,
+    showHanja: r.showHanja !== false,
     lastBackupAt: typeof r.lastBackupAt === 'string' ? r.lastBackupAt : null,
   }
 }

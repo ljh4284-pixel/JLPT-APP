@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { JudgeResult, QuestionType, Rating, Word } from '../types'
 import { playExample, playWord } from '../platform/audio'
+import { HanjaLine } from './HanjaLine'
 
 interface Props {
   word: Word
@@ -9,6 +10,7 @@ interface Props {
   intervals: Record<Rating, string>    // 각 버튼을 눌렀을 때의 다음 복습까지 간격 ("10분", "2일")
   onRate: (rating: Rating) => void
   onSuspend: () => void                // 이 단어를 학습에서 일시 제외 (문제가 있는 단어 신고)
+  showHanja: boolean                   // 한자 훈음 표시 (설정)
 }
 
 /** 화면이 뜬 직후 잠깐은 평가 버튼을 막는다 (앞 화면에서 누른 손가락이 그대로 눌리는 것 방지) */
@@ -32,7 +34,7 @@ const AUTOPLAY_DELAY_MS = 400
  *  - 정답 → 어려움/보통/쉬움 중 선택
  *  - 유형 A 는 자동 판정이 없으므로 4버튼 모두
  */
-export function Feedback({ word, questionType, result, intervals, onRate, onSuspend }: Props) {
+export function Feedback({ word, questionType, result, intervals, onRate, onSuspend, showHanja }: Props) {
   const [ready, setReady] = useState(false)
   const [confirmSuspend, setConfirmSuspend] = useState(false)
   useEffect(() => {
@@ -79,6 +81,7 @@ export function Feedback({ word, questionType, result, intervals, onRate, onSusp
         )}
         <p className="word" lang="ja">{word.word}</p>
         <p className="reading" lang="ja">{word.reading}</p>
+        {showHanja && <HanjaLine word={word.word} />}
         <button className="btn play" onClick={() => playWord(word)} aria-label="발음 재생">
           🔊 발음
         </button>

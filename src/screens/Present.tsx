@@ -1,9 +1,11 @@
 import { useEffect } from 'react'
 import type { Word } from '../types'
 import { playExample, playWord } from '../platform/audio'
+import { HanjaLine } from './HanjaLine'
 
 interface Props {
   word: Word
+  showHanja: boolean   // 한자 훈음 표시 (설정)
   onNext: () => void
 }
 
@@ -11,7 +13,7 @@ interface Props {
 const AUTOPLAY_DELAY_MS = 1000
 
 /** 단어 제시(신규): 표기, 읽기, 뜻, 예문, 발음 재생(1초 뒤 자동), 예문 재생, [다음] */
-export function Present({ word, onNext }: Props) {
+export function Present({ word, showHanja, onNext }: Props) {
   // 화면이 뜨고 1초 뒤 발음을 자동 재생한다. 그 전에 다음 카드로 넘어가면 취소된다.
   useEffect(() => {
     const id = setTimeout(() => playWord(word), AUTOPLAY_DELAY_MS)
@@ -24,6 +26,7 @@ export function Present({ word, onNext }: Props) {
         <p className="label">새 단어</p>
         <p className="word" lang="ja">{word.word}</p>
         <p className="reading" lang="ja">{word.reading}</p>
+        {showHanja && <HanjaLine word={word.word} />}
         <button className="btn play" onClick={() => playWord(word)} aria-label="발음 재생">
           🔊 발음
         </button>

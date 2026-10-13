@@ -242,3 +242,9 @@ body { background: var(--bg); }
 .help-table td:first-child { min-width: 84px; }
 .help-table td:nth-child(2) { min-width: 96px; }
 .help-ex { display: block; white-space: nowrap; }
+
+/* 한자 훈음 줄 (2026-10-14) */
+.hanja { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 8px 0 0 !important; font-size: 14px; color: var(--muted); }
+.hanja-item b { font-weight: 600; color: inherit; font-size: 15px; }
+.hanja-ko { font-size: 12px; margin-right: 2px; }
+.hanja-item.kokuji { font-size: 12px; }

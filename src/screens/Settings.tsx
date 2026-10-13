@@ -163,6 +163,23 @@ export function Settings({ level, settings, voices, suspended, message, onChange
         </section>
 
         <section>
+          <h2>한자 훈음 표시</h2>
+          <div className="seg">
+            {[true, false].map((on) => (
+              <button
+                key={String(on)}
+                type="button"
+                className={settings.showHanja === on ? 'on' : ''}
+                onClick={() => onChange({ ...settings, showHanja: on })}
+              >
+                {on ? '켬' : '끔'}
+              </button>
+            ))}
+          </div>
+          <p className="muted small">새 단어와 정답 화면에 한자마다 한국 훈음(예: 気(氣) 기운 기)을 보여줍니다. 문제 화면에는 나오지 않습니다</p>
+        </section>
+
+        <section>
           <h2>제외한 단어</h2>
           {suspended.length === 0 ? (
             <p className="muted small">없음. 문제가 있는 단어는 정답 화면 아래 '일시 제외'로 뺄 수 있습니다</p>
